@@ -24,6 +24,11 @@ XGBOOST_MODEL_PATH = (
     / "xgboost_baseline.joblib"
 )
 
+DECISION_TREE_MODEL_PATH = (
+    PROJECT_ROOT / "ml" / "models"
+    / "decision_tree_baseline.joblib"
+)
+
 OUTPUT_PATH = (
     PROJECT_ROOT / "ml" / "reports"
     / "validation_predictions.csv"
@@ -56,9 +61,11 @@ print("\nLoading models...")
 
 logistic_model = joblib.load(LOGISTIC_MODEL_PATH)
 xgboost_model = joblib.load(XGBOOST_MODEL_PATH)
+decision_tree_model = joblib.load(DECISION_TREE_MODEL_PATH)
 
 print("✓ Logistic Regression loaded.")
 print("✓ XGBoost loaded.")
+print("✓ Decision Tree loaded.")
 
 
 # ============================================================
@@ -75,8 +82,13 @@ xgboost_probability = xgboost_model.predict_proba(
     X_validation
 )[:, 1]
 
+decision_tree_probability = decision_tree_model.predict_proba(
+    X_validation
+)[:, 1]
+
 print("✓ Logistic Regression probabilities generated.")
 print("✓ XGBoost probabilities generated.")
+print("✓ Decision Tree probabilities generated.")
 
 
 # ============================================================
@@ -86,6 +98,7 @@ print("✓ XGBoost probabilities generated.")
 results = pd.DataFrame({
     "actual_class": y_validation.to_numpy(),
     "logistic_probability": logistic_probability,
+    "decision_tree_probability": decision_tree_probability,
     "xgboost_probability": xgboost_probability,
 })
 
@@ -128,6 +141,14 @@ print(
 )
 print(
     f"Max: {results['logistic_probability'].max():.6f}"
+)
+
+print("\nDecision Tree probability range:")
+print(
+    f"Min: {results['decision_tree_probability'].min():.6f}"
+)
+print(
+    f"Max: {results['decision_tree_probability'].max():.6f}"
 )
 
 print("\nXGBoost probability range:")

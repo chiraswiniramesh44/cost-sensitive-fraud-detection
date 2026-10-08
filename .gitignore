@@ -225,6 +225,7 @@ __marimo__/
 
 # Datasets
 *.csv
+!ml/reports/final_test_results.csv
 
 # Environment variables
 .env

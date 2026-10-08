@@ -17,6 +17,13 @@ THRESHOLD_RESULTS_PATH = (
     / "threshold_analysis_xgboost.csv"
 )
 
+REFINED_RESULTS_PATH = (
+    PROJECT_ROOT
+    / "ml"
+    / "reports"
+    / "refined_threshold_analysis.csv"
+)
+
 OUTPUT_DIR = PROJECT_ROOT / "ml" / "reports"
 
 
@@ -29,48 +36,81 @@ print("RESEARCH RESULTS AND FIGURES")
 print("=" * 70)
 
 results = pd.read_csv(THRESHOLD_RESULTS_PATH)
+refined_results = pd.read_csv(REFINED_RESULTS_PATH)
 
-print("\nLoaded threshold results:")
+print("\nLoaded coarse threshold results:")
 print(f"Rows: {len(results)}")
+
+print("\nLoaded refined threshold results:")
+print(f"Rows: {len(refined_results)}")
 
 
 # ============================================================
-# IMPORTANT THRESHOLDS
+# BASELINE THRESHOLD
 # ============================================================
 
 baseline = results[
     results["threshold"] == 0.50
 ].iloc[0]
 
-# ------------------------------------------------------------
-# Refined threshold experiment
-# ------------------------------------------------------------
-# The refined search found two tied minimum-cost thresholds:
-# 0.042 and 0.043
-#
-# Both have expected cost = 980.
-# We use 0.042 as the representative threshold for the
-# comparison table and explicitly record the tied range.
-# ------------------------------------------------------------
 
-refined_threshold_low = 0.042
-refined_threshold_high = 0.043
-refined_expected_cost = 980
+# ============================================================
+# REFINED THRESHOLD ANALYSIS
+# ============================================================
 
-# Values from the refined experiment
-refined_FP = 36
-refined_FN = 8
-refined_TP = 48
-refined_TN = 42626
+# Find the minimum expected cost automatically.
+minimum_cost = refined_results["expected_cost"].min()
 
-refined_precision = 0.571429
-refined_recall = 0.857143
-refined_f1 = 0.685714
+# Find every threshold having that minimum cost.
+best_rows = refined_results[
+    refined_results["expected_cost"] == minimum_cost
+].copy()
+
+best_thresholds = best_rows["threshold"].tolist()
+
+refined_threshold_low = min(best_thresholds)
+refined_threshold_high = max(best_thresholds)
+
+# Use the first tied row for the comparison table.
+refined = best_rows.iloc[0]
+
+refined_FP = int(refined["FP"])
+refined_FN = int(refined["FN"])
+refined_TP = int(refined["TP"])
+refined_TN = int(refined["TN"])
+
+refined_precision = refined["precision"]
+refined_recall = refined["recall"]
+refined_f1 = refined["f1"]
+
+refined_expected_cost = minimum_cost
 
 refined_review_rate = (
     (refined_FP + refined_TP)
-    / (refined_FP + refined_TP + refined_TN + refined_FN)
+    / (
+        refined_FP
+        + refined_TP
+        + refined_TN
+        + refined_FN
+    )
 )
+
+
+# ============================================================
+# COST REDUCTION
+# ============================================================
+
+baseline_expected_cost = baseline["expected_cost"]
+
+cost_reduction = (
+    baseline_expected_cost
+    - refined_expected_cost
+)
+
+relative_cost_reduction = (
+    cost_reduction
+    / baseline_expected_cost
+) * 100
 
 
 # ============================================================
@@ -125,6 +165,7 @@ model_comparison = pd.DataFrame({
     ],
 })
 
+
 MODEL_TABLE_PATH = (
     OUTPUT_DIR / "model_comparison_validation.csv"
 )
@@ -146,22 +187,22 @@ cost_comparison = pd.DataFrame({
     ],
     "Threshold": [
         baseline["threshold"],
-        "0.042-0.043"
+        f"{refined_threshold_low:.3f}-{refined_threshold_high:.3f}"
     ],
     "FP": [
-        baseline["FP"],
+        int(baseline["FP"]),
         refined_FP
     ],
     "FN": [
-        baseline["FN"],
+        int(baseline["FN"]),
         refined_FN
     ],
     "TP": [
-        baseline["TP"],
+        int(baseline["TP"]),
         refined_TP
     ],
     "TN": [
-        baseline["TN"],
+        int(baseline["TN"]),
         refined_TN
     ],
     "Precision": [
@@ -177,7 +218,7 @@ cost_comparison = pd.DataFrame({
         refined_f1
     ],
     "Expected_Cost": [
-        baseline["expected_cost"],
+        baseline_expected_cost,
         refined_expected_cost
     ],
     "Review_Rate": [
@@ -185,6 +226,7 @@ cost_comparison = pd.DataFrame({
         refined_review_rate
     ],
 })
+
 
 COST_TABLE_PATH = (
     OUTPUT_DIR / "cost_policy_comparison.csv"
@@ -221,20 +263,28 @@ plt.axvline(
 plt.axvline(
     refined_threshold_low,
     linestyle="--",
-    label="Refined minimum = 0.042-0.043"
+    label=(
+        f"Refined minimum = "
+        f"{refined_threshold_low:.3f}-"
+        f"{refined_threshold_high:.3f}"
+    )
 )
 
-plt.axvline(
-    refined_threshold_high,
-    linestyle="--"
-)
+if refined_threshold_high != refined_threshold_low:
+    plt.axvline(
+        refined_threshold_high,
+        linestyle="--"
+    )
 
-# Mark refined minimum cost
+# Mark minimum expected cost
 plt.scatter(
-    [refined_threshold_low, refined_threshold_high],
-    [refined_expected_cost, refined_expected_cost],
+    best_rows["threshold"],
+    best_rows["expected_cost"],
     s=80,
-    label="Minimum expected cost = 980"
+    label=(
+        f"Minimum expected cost = "
+        f"{refined_expected_cost:.0f}"
+    )
 )
 
 plt.xlabel("Decision Threshold")
@@ -277,13 +327,18 @@ plt.plot(
 plt.axvline(
     refined_threshold_low,
     linestyle="--",
-    label="Refined cost-minimum = 0.042-0.043"
+    label=(
+        f"Refined cost minimum = "
+        f"{refined_threshold_low:.3f}-"
+        f"{refined_threshold_high:.3f}"
+    )
 )
 
-plt.axvline(
-    refined_threshold_high,
-    linestyle="--"
-)
+if refined_threshold_high != refined_threshold_low:
+    plt.axvline(
+        refined_threshold_high,
+        linestyle="--"
+    )
 
 plt.xlabel("Decision Threshold")
 plt.ylabel("Score")
@@ -330,11 +385,33 @@ print("\n" + "=" * 70)
 print("REFINED COST RESULT")
 print("=" * 70)
 
-print("Minimum expected cost: 980")
-print("Tied thresholds: 0.042 and 0.043")
-print("Baseline expected cost: 1220")
-print("Cost reduction: 240")
-print("Relative reduction: 19.67%")
+print(
+    f"Minimum expected cost: "
+    f"{refined_expected_cost:.0f}"
+)
+
+print(
+    "Tied thresholds: "
+    + ", ".join(
+        f"{threshold:.3f}"
+        for threshold in best_thresholds
+    )
+)
+
+print(
+    f"Baseline expected cost: "
+    f"{baseline_expected_cost:.0f}"
+)
+
+print(
+    f"Cost reduction: "
+    f"{cost_reduction:.0f}"
+)
+
+print(
+    f"Relative reduction: "
+    f"{relative_cost_reduction:.2f}%"
+)
 
 
 print("\n" + "=" * 70)
@@ -353,4 +430,4 @@ print(COST_FIGURE_PATH)
 print("\nPrecision/recall figure:")
 print(PR_FIGURE_PATH)
 
-print("\n✓ Research results generated successfully.")
+print("\nResearch results generated successfully.")

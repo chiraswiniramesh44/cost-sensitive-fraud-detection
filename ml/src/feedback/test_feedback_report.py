@@ -73,3 +73,42 @@ def test_report_handles_malformed_records():
     assert report["total_records"] == 2
     assert report["invalid_records"] == 2
     assert len(report["issues"]) == 2
+
+def test_report_does_not_flag_duplicate_same_labels():
+    records = [
+        make_record("txn-001", FeedbackLabel.CONFIRMED_FRAUD.value),
+        make_record("txn-001", FeedbackLabel.CONFIRMED_FRAUD.value),
+    ]
+
+    report = generate_feedback_report(records)
+
+    assert report["conflicting_transactions"] == []
+    assert report["conflict_count"] == 0
+
+
+def test_report_flags_conflicting_eligible_labels():
+    records = [
+        make_record("txn-001", FeedbackLabel.CONFIRMED_FRAUD.value),
+        make_record("txn-001", FeedbackLabel.CONFIRMED_GENUINE.value),
+    ]
+
+    report = generate_feedback_report(records)
+
+    assert report["conflicting_transactions"] == ["txn-001"]
+    assert report["conflict_count"] == 1
+    assert any(
+        issue["reason"] == "Conflicting eligible feedback labels"
+        for issue in report["issues"]
+    )
+
+
+def test_report_ignores_disputed_label_when_detecting_conflicts():
+    records = [
+        make_record("txn-001", FeedbackLabel.CONFIRMED_FRAUD.value),
+        make_record("txn-001", FeedbackLabel.DISPUTED.value),
+    ]
+
+    report = generate_feedback_report(records)
+
+    assert report["conflicting_transactions"] == []
+    assert report["conflict_count"] == 0

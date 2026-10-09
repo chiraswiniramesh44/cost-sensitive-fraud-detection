@@ -1,5 +1,5 @@
 import math
-from collections import Counter
+from collections import Counter, defaultdict
 
 from ml.src.feedback.feedback_labels import FeedbackLabel
 from ml.src.feedback.feedback_validator import validate_feedback
@@ -11,6 +11,7 @@ def generate_feedback_report(
 ) -> dict:
     counts = Counter()
     issues = []
+    transaction_labels = defaultdict(set)
 
     for index, record in enumerate(feedback_records):
         if not isinstance(record, dict):
@@ -31,13 +32,15 @@ def generate_feedback_report(
             })
             continue
 
+        normalized_id = str(transaction_id).strip()
+
         try:
             label = FeedbackLabel(record.get("label"))
         except (ValueError, TypeError):
             counts["invalid_records"] += 1
             issues.append({
                 "record_index": index,
-                "transaction_id": str(transaction_id).strip(),
+                "transaction_id": normalized_id,
                 "reason": "Unsupported feedback label",
             })
             continue
@@ -48,7 +51,7 @@ def generate_feedback_report(
             counts["invalid_records"] += 1
             issues.append({
                 "record_index": index,
-                "transaction_id": str(transaction_id).strip(),
+                "transaction_id": normalized_id,
                 "reason": validation.reason,
             })
             continue
@@ -57,7 +60,7 @@ def generate_feedback_report(
             counts["not_eligible_records"] += 1
             issues.append({
                 "record_index": index,
-                "transaction_id": str(transaction_id).strip(),
+                "transaction_id": normalized_id,
                 "reason": validation.reason,
             })
             continue
@@ -68,7 +71,7 @@ def generate_feedback_report(
             counts["invalid_records"] += 1
             issues.append({
                 "record_index": index,
-                "transaction_id": str(transaction_id).strip(),
+                "transaction_id": normalized_id,
                 "reason": "Features must be a dictionary",
             })
             continue
@@ -77,7 +80,7 @@ def generate_feedback_report(
             counts["invalid_records"] += 1
             issues.append({
                 "record_index": index,
-                "transaction_id": str(transaction_id).strip(),
+                "transaction_id": normalized_id,
                 "reason": "Required features are missing",
             })
             continue
@@ -105,19 +108,35 @@ def generate_feedback_report(
             counts["invalid_records"] += 1
             issues.append({
                 "record_index": index,
-                "transaction_id": str(transaction_id).strip(),
+                "transaction_id": normalized_id,
                 "reason": "Features must contain finite numeric values",
             })
             continue
 
+        transaction_labels[normalized_id].add(label.value)
         counts["eligible_records"] += 1
 
-    total_records = len(feedback_records)
+    conflicting_transactions = sorted(
+        transaction_id
+        for transaction_id, labels in transaction_labels.items()
+        if (
+            FeedbackLabel.CONFIRMED_FRAUD.value in labels
+            and FeedbackLabel.CONFIRMED_GENUINE.value in labels
+        )
+    )
+
+    for transaction_id in conflicting_transactions:
+        issues.append({
+            "transaction_id": transaction_id,
+            "reason": "Conflicting eligible feedback labels",
+        })
 
     return {
-        "total_records": total_records,
+        "total_records": len(feedback_records),
         "eligible_records": counts["eligible_records"],
         "not_eligible_records": counts["not_eligible_records"],
         "invalid_records": counts["invalid_records"],
+        "conflicting_transactions": conflicting_transactions,
+        "conflict_count": len(conflicting_transactions),
         "issues": issues,
     }

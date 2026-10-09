@@ -1,4 +1,4 @@
-from typing import Protocol
+﻿from typing import Protocol
 
 from ml.src.feedback.training_approval import (
     TrainingApproval,
@@ -17,9 +17,17 @@ class FeedbackSource(Protocol):
 
 def build_training_data_from_store(
     feedback_source: FeedbackSource,
+    approval: TrainingApproval,
 ) -> list[TrainingExample]:
-    feedback_records = feedback_source.get_feedback()
-    return build_training_data(feedback_records)
+    if approval is None:
+        raise PermissionError(
+            "Explicit training approval is required."
+        )
+
+    return build_approved_training_data_from_store(
+        feedback_source,
+        approval,
+    )
 
 
 def build_approved_training_data_from_store(

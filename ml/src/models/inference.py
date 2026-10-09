@@ -1,6 +1,8 @@
+
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 
 
@@ -15,14 +17,6 @@ SCALER_PATH = PROJECT_ROOT / "ml" / "models" / "preprocessor.joblib"
 
 
 # ------------------------------------------------------------
-# Load model and scaler
-# ------------------------------------------------------------
-
-model = joblib.load(MODEL_PATH)
-scaler = joblib.load(SCALER_PATH)
-
-
-# ------------------------------------------------------------
 # Feature order
 # ------------------------------------------------------------
 
@@ -34,30 +28,68 @@ FEATURES = [
 
 
 # ------------------------------------------------------------
+# Load model and scaler
+# ------------------------------------------------------------
+
+model = joblib.load(MODEL_PATH)
+scaler = joblib.load(SCALER_PATH)
+
+
+# ------------------------------------------------------------
 # Prediction function
 # ------------------------------------------------------------
 
 def predict_fraud(transaction: dict) -> float:
     """
-    Predict fraud probability for one transaction.
+    Predict the fraud probability for one transaction.
 
-    Input:
-        Dictionary containing Time, V1...V28 and Amount.
+    Required features:
+        Time, V1...V28, Amount
 
-    Output:
-        Fraud probability between 0 and 1.
+    Returns:
+        A fraud probability between 0 and 1.
+
+    Raises:
+        TypeError: If transaction is not a dictionary.
+        ValueError: If features are missing or values are invalid.
     """
 
-    # Convert input dictionary to DataFrame
-    input_data = pd.DataFrame(
-        [[transaction[feature] for feature in FEATURES]],
-        columns=FEATURES,
-    )
+    # Check input type
+    if not isinstance(transaction, dict):
+        raise TypeError("Transaction must be a dictionary.")
 
-    # Apply the same scaler used during training
+    # Check required features
+    missing_features = [
+        feature for feature in FEATURES
+        if feature not in transaction
+    ]
+
+    if missing_features:
+        raise ValueError(
+            f"Missing required features: {', '.join(missing_features)}"
+        )
+
+    # Convert values into a numeric DataFrame
+    try:
+        input_data = pd.DataFrame(
+            [[transaction[feature] for feature in FEATURES]],
+            columns=FEATURES,
+        ).astype(float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "All transaction features must be numeric."
+        ) from exc
+
+    # Reject NaN and infinite values
+    if not np.isfinite(input_data.to_numpy()).all():
+        raise ValueError(
+            "Transaction features must be finite numbers."
+        )
+
+    # Apply the saved preprocessing
     input_scaled = scaler.transform(input_data)
 
-    # Get fraud probability
+    # Predict fraud probability
     fraud_probability = model.predict_proba(input_scaled)[0, 1]
 
     return float(fraud_probability)

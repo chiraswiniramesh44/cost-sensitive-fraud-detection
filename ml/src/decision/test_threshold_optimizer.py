@@ -1,5 +1,5 @@
 import numpy as np
-
+import pytest
 from ml.src.decision.cost_matrix import CostMatrix
 from ml.src.decision.threshold_optimizer import optimize_threshold
 
@@ -115,3 +115,79 @@ def test_empty_input():
         )
 
 print('All threshold optimizer tests passed')
+
+def make_cost_matrix():
+    return CostMatrix(
+        review_cost=2.0,
+        block_friction_cost=5.0,
+        missed_fraud_cost=100.0,
+        residual_risk_cost=10.0,
+        block_cost=20.0,
+    )
+
+
+@pytest.mark.parametrize(
+    "probabilities",
+    [
+        np.array([np.nan, 0.8]),
+        np.array([np.inf, 0.8]),
+        np.array([-np.inf, 0.8]),
+    ],
+)
+def test_non_finite_probabilities_rejected(probabilities):
+    with pytest.raises(ValueError):
+        optimize_threshold(
+            fraud_probabilities=probabilities,
+            actual_labels=np.array([0, 1]),
+            cost_matrix=make_cost_matrix(),
+        )
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        np.array([0.8, 1.0]),
+        np.array([0, np.nan]),
+        np.array([0, np.inf]),
+        np.array([0, 2]),
+    ],
+)
+def test_invalid_or_non_finite_labels_rejected(labels):
+    with pytest.raises(ValueError):
+        optimize_threshold(
+            fraud_probabilities=np.array([0.1, 0.8]),
+            actual_labels=labels,
+            cost_matrix=make_cost_matrix(),
+        )
+
+
+@pytest.mark.parametrize(
+    "thresholds",
+    [
+        np.array([]),
+        np.array([[0.2, 0.5]]),
+        np.array([np.nan, 0.5]),
+        np.array([0.2, np.inf]),
+        np.array([0.0, 0.5]),
+        np.array([0.2, 1.0]),
+    ],
+)
+def test_invalid_threshold_grids_rejected(thresholds):
+    with pytest.raises(ValueError):
+        optimize_threshold(
+            fraud_probabilities=np.array([0.1, 0.8]),
+            actual_labels=np.array([0, 1]),
+            cost_matrix=make_cost_matrix(),
+            thresholds=thresholds,
+        )
+
+
+@pytest.mark.parametrize("review_rate", [-0.1, 1.1, np.nan, np.inf])
+def test_invalid_max_review_rate_rejected(review_rate):
+    with pytest.raises(ValueError):
+        optimize_threshold(
+            fraud_probabilities=np.array([0.1, 0.8]),
+            actual_labels=np.array([0, 1]),
+            cost_matrix=make_cost_matrix(),
+            max_review_rate=review_rate,
+        )

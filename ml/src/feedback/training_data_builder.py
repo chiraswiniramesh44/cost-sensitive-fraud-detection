@@ -22,8 +22,7 @@ class TrainingExample:
 def build_training_data(
     feedback_records: list[dict],
 ) -> list[TrainingExample]:
-    training_data = []
-    seen_transaction_ids = set()
+    valid_records = {}
 
     for record in feedback_records:
         if not isinstance(record, dict):
@@ -39,10 +38,8 @@ def build_training_data(
         if not normalized_transaction_id:
             continue
 
-        label = record.get("label")
-
         try:
-            feedback_label = FeedbackLabel(label)
+            feedback_label = FeedbackLabel(record.get("label"))
         except (ValueError, TypeError):
             continue
 
@@ -84,23 +81,33 @@ def build_training_data(
         if not valid_features:
             continue
 
-        if normalized_transaction_id in seen_transaction_ids:
-            continue
-
         training_label = (
             1
             if feedback_label == FeedbackLabel.CONFIRMED_FRAUD
             else 0
         )
 
+        if normalized_transaction_id not in valid_records:
+            valid_records[normalized_transaction_id] = {
+                "label": training_label,
+                "features": validated_features,
+                "conflict": False,
+            }
+        elif valid_records[normalized_transaction_id]["label"] != training_label:
+            valid_records[normalized_transaction_id]["conflict"] = True
+
+    training_data = []
+
+    for transaction_id, record in valid_records.items():
+        if record["conflict"]:
+            continue
+
         training_data.append(
             TrainingExample(
-                transaction_id=normalized_transaction_id,
-                features=validated_features,
-                label=training_label,
+                transaction_id=transaction_id,
+                features=record["features"],
+                label=record["label"],
             )
         )
-
-        seen_transaction_ids.add(normalized_transaction_id)
 
     return training_data

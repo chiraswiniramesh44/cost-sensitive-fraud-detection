@@ -124,3 +124,52 @@ def test_get_feedback_for_transaction_rejects_empty_id(store):
         match="transaction_id must not be empty",
     ):
         store.get_feedback_for_transaction("   ")
+def test_transaction_history_matches_full_feedback_listing(store):
+    store.save_feedback(
+        transaction_id="TXN-010",
+        operator_id="operator-01",
+        label=FeedbackLabel.CONFIRMED_FRAUD,
+        features={"Amount": 200.0},
+    )
+    store.save_feedback(
+        transaction_id="TXN-010",
+        operator_id="operator-02",
+        label=FeedbackLabel.DISPUTED,
+        features={"Amount": 200.0},
+    )
+    store.save_feedback(
+        transaction_id="TXN-011",
+        operator_id="operator-03",
+        label=FeedbackLabel.CONFIRMED_GENUINE,
+        features={"Amount": 50.0},
+    )
+
+    all_feedback = store.get_feedback()
+    transaction_history = store.get_feedback_for_transaction("TXN-010")
+
+    expected_history = [
+        record
+        for record in all_feedback
+        if record["transaction_id"] == "TXN-010"
+    ]
+
+    assert transaction_history == expected_history
+    assert len(transaction_history) == 2
+
+
+def test_repeated_submissions_are_preserved_in_audit_history(store):
+    for _ in range(3):
+        store.save_feedback(
+            transaction_id="TXN-012",
+            operator_id="operator-01",
+            label=FeedbackLabel.CONFIRMED_FRAUD,
+            features={"Amount": 300.0},
+        )
+
+    history = store.get_feedback_for_transaction("TXN-012")
+
+    assert len(history) == 3
+    assert all(
+        record["label"] == "CONFIRMED_FRAUD"
+        for record in history
+    )

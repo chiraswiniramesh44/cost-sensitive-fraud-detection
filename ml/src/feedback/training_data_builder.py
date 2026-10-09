@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 
 from ml.src.feedback.feedback_labels import FeedbackLabel
@@ -24,6 +25,13 @@ def build_training_data(
     training_data = []
 
     for record in feedback_records:
+        if not isinstance(record, dict):
+            continue
+
+        transaction_id = record.get("transaction_id")
+        if transaction_id is None or not str(transaction_id).strip():
+            continue
+
         label = record.get("label")
 
         try:
@@ -33,7 +41,7 @@ def build_training_data(
 
         validation = validate_feedback(feedback_label)
 
-        if not validation.usable_for_training:
+        if not validation.valid or not validation.usable_for_training:
             continue
 
         features = record.get("features")
@@ -44,6 +52,31 @@ def build_training_data(
         if not all(feature in features for feature in FEATURES):
             continue
 
+        validated_features = {}
+        valid_features = True
+
+        for feature in FEATURES:
+            value = features[feature]
+
+            if isinstance(value, bool):
+                valid_features = False
+                break
+
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError, OverflowError):
+                valid_features = False
+                break
+
+            if not math.isfinite(numeric_value):
+                valid_features = False
+                break
+
+            validated_features[feature] = numeric_value
+
+        if not valid_features:
+            continue
+
         training_label = (
             1
             if feedback_label == FeedbackLabel.CONFIRMED_FRAUD
@@ -52,11 +85,8 @@ def build_training_data(
 
         training_data.append(
             TrainingExample(
-                transaction_id=str(record["transaction_id"]),
-                features={
-                    feature: float(features[feature])
-                    for feature in FEATURES
-                },
+                transaction_id=str(transaction_id),
+                features=validated_features,
                 label=training_label,
             )
         )

@@ -69,7 +69,9 @@ class FeedbackStore:
                 sort_keys=True,
             )
         except (TypeError, ValueError) as exc:
-            raise ValueError("features must contain JSON-compatible finite values") from exc
+            raise ValueError(
+                "features must contain JSON-compatible finite values"
+            ) from exc
 
         submitted_at = datetime.now(timezone.utc).isoformat()
 
@@ -106,16 +108,45 @@ class FeedbackStore:
                 """
             ).fetchall()
 
-        records = []
-        for row in rows:
-            records.append(
-                {
-                    "transaction_id": row["transaction_id"],
-                    "operator_id": row["operator_id"],
-                    "label": row["label"],
-                    "submitted_at": row["submitted_at"],
-                    "features": json.loads(row["features_json"]),
-                }
-            )
+        return [
+            {
+                "transaction_id": row["transaction_id"],
+                "operator_id": row["operator_id"],
+                "label": row["label"],
+                "submitted_at": row["submitted_at"],
+                "features": json.loads(row["features_json"]),
+            }
+            for row in rows
+        ]
 
-        return records
+    def get_feedback_for_transaction(
+        self,
+        transaction_id: str,
+    ) -> list[dict]:
+        normalized_id = str(transaction_id).strip()
+
+        if not normalized_id:
+            raise ValueError("transaction_id must not be empty")
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT transaction_id, operator_id, label,
+                       submitted_at, features_json
+                FROM operator_feedback
+                WHERE transaction_id = ?
+                ORDER BY id
+                """,
+                (normalized_id,),
+            ).fetchall()
+
+        return [
+            {
+                "transaction_id": row["transaction_id"],
+                "operator_id": row["operator_id"],
+                "label": row["label"],
+                "submitted_at": row["submitted_at"],
+                "features": json.loads(row["features_json"]),
+            }
+            for row in rows
+        ]

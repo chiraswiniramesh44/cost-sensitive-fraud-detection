@@ -79,3 +79,48 @@ def test_non_finite_features_are_rejected(store):
             label=FeedbackLabel.CONFIRMED_FRAUD,
             features={"Amount": float("nan")},
         )
+
+def test_get_feedback_for_transaction_returns_all_history(store):
+    store.save_feedback(
+        transaction_id="TXN-006",
+        operator_id="operator-01",
+        label=FeedbackLabel.CONFIRMED_FRAUD,
+        features={"Amount": 200.0},
+    )
+    store.save_feedback(
+        transaction_id="TXN-006",
+        operator_id="operator-02",
+        label=FeedbackLabel.CONFIRMED_GENUINE,
+        features={"Amount": 200.0},
+    )
+    store.save_feedback(
+        transaction_id="TXN-007",
+        operator_id="operator-03",
+        label=FeedbackLabel.CONFIRMED_GENUINE,
+        features={"Amount": 50.0},
+    )
+
+    history = store.get_feedback_for_transaction(" TXN-006 ")
+
+    assert len(history) == 2
+    assert [record["operator_id"] for record in history] == [
+        "operator-01",
+        "operator-02",
+    ]
+    assert [record["label"] for record in history] == [
+        "CONFIRMED_FRAUD",
+        "CONFIRMED_GENUINE",
+    ]
+    assert all(record["submitted_at"] for record in history)
+
+
+def test_get_feedback_for_unknown_transaction_returns_empty_list(store):
+    assert store.get_feedback_for_transaction("TXN-MISSING") == []
+
+
+def test_get_feedback_for_transaction_rejects_empty_id(store):
+    with pytest.raises(
+        ValueError,
+        match="transaction_id must not be empty",
+    ):
+        store.get_feedback_for_transaction("   ")

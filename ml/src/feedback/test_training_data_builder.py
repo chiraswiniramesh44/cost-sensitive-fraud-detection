@@ -118,6 +118,13 @@ class TestTrainingDataBuilder(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].label, 1)
         self.assertEqual(result[0].features["Amount"], 129.0)
+    def test_boolean_features_are_excluded(self):
+        record = make_record()
+        record["features"]["V14"] = True
+
+        result = build_training_data([record])
+
+        self.assertEqual(result, [])
 
 
 if __name__ == "__main__":

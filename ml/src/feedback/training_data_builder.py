@@ -23,13 +23,20 @@ def build_training_data(
     feedback_records: list[dict],
 ) -> list[TrainingExample]:
     training_data = []
+    seen_transaction_ids = set()
 
     for record in feedback_records:
         if not isinstance(record, dict):
             continue
 
         transaction_id = record.get("transaction_id")
-        if transaction_id is None or not str(transaction_id).strip():
+
+        if transaction_id is None:
+            continue
+
+        normalized_transaction_id = str(transaction_id).strip()
+
+        if not normalized_transaction_id:
             continue
 
         label = record.get("label")
@@ -77,6 +84,9 @@ def build_training_data(
         if not valid_features:
             continue
 
+        if normalized_transaction_id in seen_transaction_ids:
+            continue
+
         training_label = (
             1
             if feedback_label == FeedbackLabel.CONFIRMED_FRAUD
@@ -85,10 +95,12 @@ def build_training_data(
 
         training_data.append(
             TrainingExample(
-                transaction_id=str(transaction_id),
+                transaction_id=normalized_transaction_id,
                 features=validated_features,
                 label=training_label,
             )
         )
+
+        seen_transaction_ids.add(normalized_transaction_id)
 
     return training_data

@@ -1,7 +1,6 @@
 import math
 import unittest
 
-from ml.src.feedback.feedback_labels import FeedbackLabel
 from ml.src.feedback.training_data_builder import (
     FEATURES,
     build_training_data,
@@ -86,10 +85,7 @@ class TestTrainingDataBuilder(unittest.TestCase):
         record = make_record()
         record["features"]["V14"] = "not-a-number"
 
-        try:
-            result = build_training_data([record])
-        except (ValueError, TypeError):
-            result = []
+        result = build_training_data([record])
 
         self.assertEqual(result, [])
 
@@ -99,10 +95,7 @@ class TestTrainingDataBuilder(unittest.TestCase):
                 record = make_record()
                 record["features"]["V14"] = value
 
-                try:
-                    result = build_training_data([record])
-                except (ValueError, TypeError):
-                    result = []
+                result = build_training_data([record])
 
                 self.assertEqual(result, [])
                 if result:
@@ -112,6 +105,33 @@ class TestTrainingDataBuilder(unittest.TestCase):
                             for v in result[0].features.values()
                         )
                     )
+
+    def test_duplicate_transaction_ids_are_included_only_once(self):
+        first_record = make_record("CONFIRMED_FRAUD")
+        second_record = make_record("CONFIRMED_GENUINE")
+
+        second_record["features"]["Amount"] = 999.0
+
+        result = build_training_data(
+            [first_record, second_record]
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].label, 1)
+        self.assertEqual(result[0].features["Amount"], 129.0)
+
+    def test_transaction_ids_are_normalized_before_deduplication(self):
+        first_record = make_record("CONFIRMED_FRAUD")
+        second_record = make_record("CONFIRMED_GENUINE")
+
+        second_record["transaction_id"] = " TX-001 "
+
+        result = build_training_data(
+            [first_record, second_record]
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].transaction_id, "TX-001")
 
 
 if __name__ == "__main__":

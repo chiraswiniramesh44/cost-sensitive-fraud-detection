@@ -1,10 +1,10 @@
 import pandas as pd
 
-from inference import predict_fraud
+from ml.src.models.inference import predict_fraud
 
 
 # Load raw validation data
-df = pd.read_csv("ml/data/validation.csv")
+df = pd.read_csv("ml/data/validation_processed.csv")
 
 
 # Find one legitimate transaction

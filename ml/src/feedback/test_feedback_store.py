@@ -1,0 +1,81 @@
+import pytest
+
+from ml.src.feedback.feedback_labels import FeedbackLabel
+from ml.src.feedback.feedback_store import FeedbackStore
+
+
+@pytest.fixture
+def store(tmp_path):
+    return FeedbackStore(tmp_path / "test_feedback.sqlite3")
+
+
+def test_save_and_retrieve_feedback(store):
+    features = {"Time": 100.0, "Amount": 250.5}
+
+    feedback_id = store.save_feedback(
+        transaction_id="TXN-001",
+        operator_id="operator-01",
+        label=FeedbackLabel.CONFIRMED_FRAUD,
+        features=features,
+    )
+
+    records = store.get_feedback()
+
+    assert feedback_id == 1
+    assert len(records) == 1
+    assert records[0]["transaction_id"] == "TXN-001"
+    assert records[0]["operator_id"] == "operator-01"
+    assert records[0]["label"] == "CONFIRMED_FRAUD"
+    assert records[0]["features"] == features
+    assert records[0]["submitted_at"]
+
+
+def test_disputed_feedback_can_be_audited(store):
+    store.save_feedback(
+        transaction_id="TXN-002",
+        operator_id="operator-02",
+        label=FeedbackLabel.DISPUTED,
+        features={"Amount": 100.0},
+    )
+
+    records = store.get_feedback()
+
+    assert len(records) == 1
+    assert records[0]["label"] == "DISPUTED"
+
+
+def test_invalid_label_is_rejected(store):
+    with pytest.raises(ValueError, match="Unsupported feedback label"):
+        store.save_feedback(
+            transaction_id="TXN-003",
+            operator_id="operator-01",
+            label="UNKNOWN",
+            features={},
+        )
+
+
+@pytest.mark.parametrize(
+    ("transaction_id", "operator_id"),
+    [
+        ("", "operator-01"),
+        ("TXN-004", ""),
+    ],
+)
+def test_empty_identifiers_are_rejected(store, transaction_id, operator_id):
+    with pytest.raises(ValueError):
+        store.save_feedback(
+            transaction_id=transaction_id,
+            operator_id=operator_id,
+            label=FeedbackLabel.CONFIRMED_GENUINE,
+            features={},
+        )
+
+
+def test_non_finite_features_are_rejected(store):
+    with pytest.raises(ValueError, match="features must contain JSON-compatible finite values"):
+        store.save_feedback(
+            transaction_id="TXN-005",
+            operator_id="operator-01",
+            label=FeedbackLabel.CONFIRMED_FRAUD,
+            features={"Amount": float("nan")},
+        )

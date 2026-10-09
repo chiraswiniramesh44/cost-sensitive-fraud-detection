@@ -1,16 +1,81 @@
-# React + Vite
+# Cost-Sensitive Fraud Detection System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React-based frontend for the Cost-Sensitive Fraud Detection
+with Operator Feedback Loop project.
 
-Currently, two official plugins are available:
+## Technology Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React
+- Vite
+- React Router
+- Axios
+- Recharts
+- CSS
 
-## React Compiler
+## Prerequisites
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Node.js
+- npm
+- Backend API (for real data and authentication)
 
-## Expanding the ESLint configuration
+## Installation
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Open a terminal in the frontend directory and run:
+
+    npm install
+
+## Environment Configuration
+
+Create a `.env` file inside the `frontend` directory.
+
+For local demonstration, configure:
+
+    VITE_DEMO_MODE=true
+    VITE_API_BASE_URL=http://localhost:8000
+
+Demo mode displays illustrative sample data. Feedback submissions
+are not stored in the database, and displayed metrics are not actual
+model evaluation results.
+
+## Run the Application
+
+Start the development server:
+
+    npm run dev
+
+Open the local URL shown in the terminal.
+
+## Build for Production
+
+Run:
+
+    npm run build
+
+The production-ready files are generated in the `dist` directory.
+
+## Application Pages
+
+- Dashboard
+- Risk Analytics
+- Review Queue
+- Case Detail
+- Feedback Analytics
+- Model Monitoring
+- Login
+
+## Backend Integration
+
+The frontend includes API service modules for authentication,
+transaction predictions, feedback, dashboard metrics, and model
+information.
+
+Real authentication, fraud predictions, feedback persistence,
+and model metrics require a correctly configured backend.
+
+## Important Notes
+
+- Demo values are illustrative, not actual research results.
+- Feedback entered in demo mode is not saved to the database.
+- Disable demo mode and verify authentication and API connectivity
+  before production deployment.
+- Never commit API secrets or private credentials to GitHub.

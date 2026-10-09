@@ -1,4 +1,7 @@
-
+from ml.src.feedback.training_approval import TrainingApproval
+from ml.src.feedback.feedback_training_pipeline import (
+    build_approved_training_data_from_store,
+)
 from ml.src.feedback.feedback_labels import FeedbackLabel
 from ml.src.feedback.feedback_store import FeedbackStore
 from ml.src.feedback.feedback_training_pipeline import (
@@ -106,3 +109,51 @@ def test_pipeline_excludes_conflicting_labels(tmp_path):
     )
 
     assert build_training_data_from_store(store) == []
+def test_approved_pipeline_excludes_unapproved_feedback(tmp_path):
+    store = FeedbackStore(tmp_path / "feedback.sqlite3")
+
+    store.save_feedback(
+        transaction_id="txn-approved",
+        operator_id="operator-1",
+        label=FeedbackLabel.CONFIRMED_FRAUD,
+        features=make_features(),
+    )
+    store.save_feedback(
+        transaction_id="txn-unapproved",
+        operator_id="operator-2",
+        label=FeedbackLabel.CONFIRMED_GENUINE,
+        features=make_features(),
+    )
+
+    approval = TrainingApproval(
+        approved_transaction_ids=frozenset({"txn-approved"})
+    )
+
+    examples = build_approved_training_data_from_store(
+        store,
+        approval,
+    )
+
+    assert len(examples) == 1
+    assert examples[0].transaction_id == "txn-approved"
+    assert examples[0].label == 1
+
+
+def test_approved_pipeline_returns_empty_without_approvals(tmp_path):
+    store = FeedbackStore(tmp_path / "feedback.sqlite3")
+
+    store.save_feedback(
+        transaction_id="txn-007",
+        operator_id="operator-1",
+        label=FeedbackLabel.CONFIRMED_FRAUD,
+        features=make_features(),
+    )
+
+    approval = TrainingApproval(
+        approved_transaction_ids=frozenset()
+    )
+
+    assert build_approved_training_data_from_store(
+        store,
+        approval,
+    ) == []

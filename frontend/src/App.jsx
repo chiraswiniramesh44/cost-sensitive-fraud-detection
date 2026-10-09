@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Navigate,
@@ -15,8 +16,10 @@ import ModelMonitoring from "./pages/ModelMonitoring";
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("access_token");
+  const demoMode =
+    import.meta.env.VITE_DEMO_MODE === "true";
 
-  if (!token) {
+  if (!token && !demoMode) {
     return <Navigate to="/login" replace />;
   }
 
@@ -24,17 +27,17 @@ function ProtectedRoute({ children }) {
 }
 
 function App() {
+  const demoMode =
+    import.meta.env.VITE_DEMO_MODE === "true";
+
   return (
     <BrowserRouter>
       <Routes>
-
-        {/* Login */}
         <Route
           path="/login"
           element={<Login />}
         />
 
-        {/* Dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -44,7 +47,6 @@ function App() {
           }
         />
 
-        {/* Risk Analytics */}
         <Route
           path="/risk-analytics"
           element={
@@ -54,7 +56,6 @@ function App() {
           }
         />
 
-        {/* Review Queue */}
         <Route
           path="/review-queue"
           element={
@@ -64,7 +65,6 @@ function App() {
           }
         />
 
-        {/* Case Detail */}
         <Route
           path="/case/:id"
           element={
@@ -74,7 +74,6 @@ function App() {
           }
         />
 
-        {/* Feedback Analytics */}
         <Route
           path="/feedback-analytics"
           element={
@@ -84,7 +83,6 @@ function App() {
           }
         />
 
-        {/* Model Monitoring */}
         <Route
           path="/model-monitoring"
           element={
@@ -94,28 +92,25 @@ function App() {
           }
         />
 
-        {/* Default */}
         <Route
           path="/"
           element={
             <Navigate
-              to="/login"
+              to={demoMode ? "/dashboard" : "/login"}
               replace
             />
           }
         />
 
-        {/* Unknown URL */}
         <Route
           path="*"
           element={
             <Navigate
-              to="/login"
+              to={demoMode ? "/dashboard" : "/login"}
               replace
             />
           }
         />
-
       </Routes>
     </BrowserRouter>
   );

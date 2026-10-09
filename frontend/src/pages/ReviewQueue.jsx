@@ -1,81 +1,99 @@
-import { useEffect, useState } from "react";
+
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
-import TransactionTable from "../components/TransactionTable";
-import LoadingSpinner from "../components/LoadingSpinner";
-import ErrorMessage from "../components/ErrorMessage";
-import EmptyState from "../components/EmptyState";
-import transactionService from "../services/transactionService";
+import RiskBadge from "../components/RiskBadge";
+import DecisionBadge from "../components/DecisionBadge";
+
+const demoTransactions = [
+  {
+    id: "DEMO-1001",
+    amount: 18500,
+    probability: 0.942,
+    risk: "HIGH",
+    decision: "BLOCK",
+    reason: "Unusual transaction amount",
+    date: "2026-10-09 09:15",
+  },
+  {
+    id: "DEMO-1002",
+    amount: 7200,
+    probability: 0.685,
+    risk: "MEDIUM",
+    decision: "REVIEW",
+    reason: "Unusual transaction pattern",
+    date: "2026-10-09 09:20",
+  },
+  {
+    id: "DEMO-1003",
+    amount: 950,
+    probability: 0.081,
+    risk: "LOW",
+    decision: "APPROVE",
+    reason: "Low estimated risk",
+    date: "2026-10-09 09:25",
+  },
+  {
+    id: "DEMO-1004",
+    amount: 26500,
+    probability: 0.887,
+    risk: "HIGH",
+    decision: "BLOCK",
+    reason: "High estimated fraud probability",
+    date: "2026-10-09 09:30",
+  },
+  {
+    id: "DEMO-1005",
+    amount: 4300,
+    probability: 0.514,
+    risk: "MEDIUM",
+    decision: "REVIEW",
+    reason: "Requires operator assessment",
+    date: "2026-10-09 09:35",
+  },
+  {
+    id: "DEMO-1006",
+    amount: 1200,
+    probability: 0.12,
+    risk: "LOW",
+    decision: "APPROVE",
+    reason: "Low estimated risk",
+    date: "2026-10-09 09:40",
+  },
+];
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
 
 function ReviewQueue() {
   const navigate = useNavigate();
+  const [riskFilter, setRiskFilter] = useState("ALL");
+  const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("high");
 
-  const [transactions, setTransactions] = useState([]);
-  const [filteredTransactions, setFilteredTransactions] = useState([]);
-  const [filter, setFilter] = useState("ALL");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const filteredTransactions = useMemo(() => {
+    const filtered = demoTransactions.filter((transaction) => {
+      const matchesRisk =
+        riskFilter === "ALL" || transaction.risk === riskFilter;
 
-  useEffect(() => {
-    const loadReviewQueue = async () => {
-      setLoading(true);
-      setError("");
+      const matchesSearch =
+        transaction.id.toLowerCase().includes(search.toLowerCase());
 
-      try {
-        const response =
-          await transactionService.getReviewQueue();
+      return matchesRisk && matchesSearch;
+    });
 
-        const data =
-          response?.data ||
-          response?.transactions ||
-          response ||
-          [];
-
-        const transactionList = Array.isArray(data)
-          ? data
-          : [];
-
-        setTransactions(transactionList);
-        setFilteredTransactions(transactionList);
-      } catch (err) {
-        console.error(
-          "Review queue loading error:",
-          err
-        );
-
-        setError(
-          err.response?.data?.detail ||
-            "Unable to load review queue."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadReviewQueue();
-  }, []);
-
-  useEffect(() => {
-    if (filter === "ALL") {
-      setFilteredTransactions(transactions);
-      return;
-    }
-
-    const filtered = transactions.filter(
-      (transaction) =>
-        transaction.risk_level?.toUpperCase() ===
-        filter
+    return filtered.sort((a, b) =>
+      sortOrder === "high"
+        ? b.probability - a.probability
+        : a.probability - b.probability
     );
-
-    setFilteredTransactions(filtered);
-  }, [filter, transactions]);
-
-  const handleSelect = (transaction) => {
-    if (transaction.id) {
-      navigate(`/case/${transaction.id}`);
-    }
-  };
+  }, [riskFilter, search, sortOrder]);
 
   return (
     <div className="app-layout">
@@ -88,57 +106,118 @@ function ReviewQueue() {
           <div className="page-header">
             <div>
               <h1>Review Queue</h1>
-
               <p>
-                Review transactions flagged for operator
-                assessment.
+                Examine sample transactions and open their
+                details for operator assessment.
               </p>
             </div>
 
-            <div>
-              <label htmlFor="risk-filter">
-                Risk Level
-              </label>
-
-              <select
-                id="risk-filter"
-                value={filter}
-                onChange={(event) =>
-                  setFilter(event.target.value)
-                }
-              >
-                <option value="ALL">All</option>
-                <option value="HIGH">High</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="LOW">Low</option>
-              </select>
-            </div>
+            <span className="data-status">DEMO DATA ONLY</span>
           </div>
 
-          {loading && (
-            <LoadingSpinner message="Loading review queue..." />
-          )}
+          <div className="dashboard-info">
+            <p>
+              The backend is pending. These illustrative
+              transactions are local demo records, not actual
+              fraud alerts.
+            </p>
+          </div>
 
-          {!loading && error && (
-            <ErrorMessage message={error} />
-          )}
-
-          {!loading &&
-            !error &&
-            filteredTransactions.length === 0 && (
-              <EmptyState message="No transactions require review." />
-            )}
-
-          {!loading &&
-            !error &&
-            filteredTransactions.length > 0 && (
-              <div className="dashboard-card">
-                <TransactionTable
-                  transactions={filteredTransactions}
-                  onSelect={handleSelect}
+          <section className="dashboard-card">
+            <div className="review-toolbar">
+              <label>
+                Search transaction
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Example: DEMO-1001"
                 />
-              </div>
-            )}
+              </label>
+
+              <label>
+                Risk level
+                <select
+                  value={riskFilter}
+                  onChange={(event) => setRiskFilter(event.target.value)}
+                >
+                  <option value="ALL">All levels</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </select>
+              </label>
+
+              <label>
+                Sort by probability
+                <select
+                  value={sortOrder}
+                  onChange={(event) => setSortOrder(event.target.value)}
+                >
+                  <option value="high">Highest first</option>
+                  <option value="low">Lowest first</option>
+                </select>
+              </label>
+            </div>
+
+            <p className="review-count">
+              Showing {filteredTransactions.length} of{" "}
+              {demoTransactions.length} sample transactions
+            </p>
+
+            <div className="transaction-table-container">
+              <table className="transaction-table">
+                <thead>
+                  <tr>
+                    <th>Transaction ID</th>
+                    <th>Amount</th>
+                    <th>Fraud Probability</th>
+                    <th>Risk</th>
+                    <th>Decision</th>
+                    <th>Reason</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filteredTransactions.map((transaction) => (
+                    <tr key={transaction.id}>
+                      <td>{transaction.id}</td>
+                      <td>{formatCurrency(transaction.amount)}</td>
+                      <td>
+                        {(transaction.probability * 100).toFixed(1)}%
+                      </td>
+                      <td>
+                        <RiskBadge level={transaction.risk} />
+                      </td>
+                      <td>
+                        <DecisionBadge decision={transaction.decision} />
+                      </td>
+                      <td>{transaction.reason}</td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(`/case/${transaction.id}`)
+                          }
+                        >
+                          View case
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {filteredTransactions.length === 0 && (
+                    <tr>
+                      <td colSpan="7">
+                        No sample transactions match your filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </main>
       </div>
     </div>

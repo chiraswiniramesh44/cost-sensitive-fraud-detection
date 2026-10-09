@@ -1,73 +1,48 @@
-import { useEffect, useState } from "react";
+
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from "recharts";
+
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import StatCard from "../components/StatCard";
-import LoadingSpinner from "../components/LoadingSpinner";
-import ErrorMessage from "../components/ErrorMessage";
-import EmptyState from "../components/EmptyState";
-import dashboardService from "../services/dashboardService";
-import { FEEDBACK_DECISIONS } from "../utils/constants";
+
+const feedbackData = [
+  { name: "Confirmed Fraud", count: 24 },
+  { name: "Confirmed Genuine", count: 38 },
+  { name: "Disputed", count: 8 },
+  { name: "Inconclusive", count: 10 },
+];
+
+const COLORS = ["#dc2626", "#16a34a", "#f59e0b", "#64748b"];
 
 function FeedbackAnalytics() {
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const totalFeedback = feedbackData.reduce(
+    (total, item) => total + item.count,
+    0
+  );
 
-  useEffect(() => {
-    const loadFeedbackAnalytics = async () => {
-      setLoading(true);
-      setError("");
+  const confirmedFraud =
+    feedbackData.find((item) => item.name === "Confirmed Fraud")?.count ?? 0;
 
-      try {
-        const response =
-          await dashboardService.getSummary();
+  const confirmedGenuine =
+    feedbackData.find((item) => item.name === "Confirmed Genuine")?.count ?? 0;
 
-        setSummary(response);
-      } catch (err) {
-        console.error(
-          "Feedback analytics loading error:",
-          err
-        );
+  const disputed =
+    feedbackData.find((item) => item.name === "Disputed")?.count ?? 0;
 
-        setError(
-          err.response?.data?.detail ||
-            "Unable to load feedback analytics."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadFeedbackAnalytics();
-  }, []);
-
-  const feedback = summary?.feedback || {};
-
-  const totalFeedback =
-    feedback.total ??
-    Object.values(feedback).reduce(
-      (total, value) =>
-        typeof value === "number"
-          ? total + value
-          : total,
-      0
-    );
-
-  if (loading) {
-    return (
-      <div className="app-layout">
-        <Sidebar />
-
-        <div className="main-area">
-          <Navbar />
-
-          <main className="page-content">
-            <LoadingSpinner message="Loading feedback analytics..." />
-          </main>
-        </div>
-      </div>
-    );
-  }
+  const inconclusive =
+    feedbackData.find((item) => item.name === "Inconclusive")?.count ?? 0;
 
   return (
     <div className="app-layout">
@@ -80,138 +55,139 @@ function FeedbackAnalytics() {
           <div className="page-header">
             <div>
               <h1>Feedback Analytics</h1>
-
               <p>
-                Analyze operator feedback collected from
-                reviewed fraud cases.
+                Explore operator feedback categories and
+                their distribution.
               </p>
             </div>
+
+            <span className="data-status">DEMO DATA ONLY</span>
           </div>
 
-          {error && (
-            <ErrorMessage message={error} />
-          )}
+          <div className="dashboard-info">
+            <p>
+              Backend connection is pending. These illustrative
+              counts are for interface testing only and are
+              not actual operator feedback records.
+            </p>
+          </div>
 
-          {!summary && !error ? (
-            <EmptyState
-              message="No feedback analytics data available."
+          <section className="stats-grid">
+            <StatCard
+              title="Total Feedback"
+              value={totalFeedback}
+              subtitle="Illustrative records"
             />
-          ) : (
-            <>
-              <section className="stats-grid">
-                <StatCard
-                  title="Total Feedback"
-                  value={totalFeedback}
-                  subtitle="Operator feedback records"
-                />
 
-                <StatCard
-                  title="Confirmed Fraud"
-                  value={
-                    feedback[
-                      FEEDBACK_DECISIONS.CONFIRMED_FRAUD
-                    ] ?? 0
-                  }
-                  subtitle="Cases confirmed as fraud"
-                />
+            <StatCard
+              title="Confirmed Fraud"
+              value={confirmedFraud}
+              subtitle="Sample count"
+            />
 
-                <StatCard
-                  title="Confirmed Genuine"
-                  value={
-                    feedback[
-                      FEEDBACK_DECISIONS.CONFIRMED_GENUINE
-                    ] ?? 0
-                  }
-                  subtitle="Cases confirmed genuine"
-                />
+            <StatCard
+              title="Confirmed Genuine"
+              value={confirmedGenuine}
+              subtitle="Sample count"
+            />
 
-                <StatCard
-                  title="Disputed"
-                  value={
-                    feedback[
-                      FEEDBACK_DECISIONS.DISPUTED
-                    ] ?? 0
-                  }
-                  subtitle="Cases requiring further review"
-                />
+            <StatCard
+              title="Disputed"
+              value={disputed}
+              subtitle="Sample count"
+            />
 
-                <StatCard
-                  title="Inconclusive"
-                  value={
-                    feedback[
-                      FEEDBACK_DECISIONS.INCONCLUSIVE
-                    ] ?? 0
-                  }
-                  subtitle="Cases without a final conclusion"
-                />
-              </section>
+            <StatCard
+              title="Inconclusive"
+              value={inconclusive}
+              subtitle="Sample count"
+            />
+          </section>
 
-              <section className="dashboard-grid">
-                <div className="dashboard-card">
-                  <h3>Operator Feedback Loop</h3>
+          <section className="dashboard-grid">
+            <div className="dashboard-card">
+              <h2>Feedback Distribution</h2>
+              <p>
+                Illustrative operator feedback categories.
+              </p>
 
-                  <p>
-                    Operator feedback provides ground-truth
-                    information that can be used to evaluate
-                    model predictions and support future model
-                    improvement.
-                  </p>
-                </div>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={feedbackData}
+                      dataKey="count"
+                      nameKey="name"
+                      cx="50%"
+                      cy="45%"
+                      outerRadius={95}
+                      label
+                    >
+                      {feedbackData.map((item, index) => (
+                        <Cell
+                          key={item.name}
+                          fill={COLORS[index]}
+                        />
+                      ))}
+                    </Pie>
 
-                <div className="dashboard-card">
-                  <h3>Feedback Distribution</h3>
-
-                  {totalFeedback > 0 ? (
-                    <div className="feedback-distribution">
-                      <p>
-                        Confirmed Fraud:{" "}
-                        {feedback[
-                          FEEDBACK_DECISIONS.CONFIRMED_FRAUD
-                        ] ?? 0}
-                      </p>
-
-                      <p>
-                        Confirmed Genuine:{" "}
-                        {feedback[
-                          FEEDBACK_DECISIONS.CONFIRMED_GENUINE
-                        ] ?? 0}
-                      </p>
-
-                      <p>
-                        Disputed:{" "}
-                        {feedback[
-                          FEEDBACK_DECISIONS.DISPUTED
-                        ] ?? 0}
-                      </p>
-
-                      <p>
-                        Inconclusive:{" "}
-                        {feedback[
-                          FEEDBACK_DECISIONS.INCONCLUSIVE
-                        ] ?? 0}
-                      </p>
-                    </div>
-                  ) : (
-                    <EmptyState
-                      message="No operator feedback has been recorded."
-                    />
-                  )}
-                </div>
-              </section>
-
-              <div className="dashboard-card">
-                <h3>Research Perspective</h3>
-
-                <p>
-                  The feedback loop allows operator decisions
-                  to be compared with model predictions. This
-                  information can later support evaluation of
-                  model performance, threshold decisions, and
-                  cost-sensitive retraining.
-                </p>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            </>
-          )}
+            </div>
+
+            <div className="dashboard-card">
+              <h2>Feedback Category Counts</h2>
+              <p>
+                Compare the sample number of records in each
+                feedback category.
+              </p>
+
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={feedbackData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      angle={-15}
+                      textAnchor="end"
+                      height={75}
+                      interval={0}
+                    />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Bar
+                      dataKey="count"
+                      name="Sample records"
+                      fill="#2563eb"
+                      radius={[5, 5, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </section>
+
+          <section className="dashboard-card">
+            <h2>Operator Feedback Loop</h2>
+
+            <p>
+              Operator feedback can help evaluate prediction
+              quality and identify cases where the model's
+              decision differs from the operator's assessment.
+              In the complete system, feedback will be stored
+              by the backend and may support model evaluation
+              and future retraining under an approved workflow.
+            </p>
+
+            <p>
+              Current status: frontend demonstration only.
+              Feedback persistence and backend integration
+              have not been implemented here.
+            </p>
+          </section>
         </main>
       </div>
     </div>

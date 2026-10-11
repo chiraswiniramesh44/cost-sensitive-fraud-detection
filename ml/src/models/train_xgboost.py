@@ -114,7 +114,7 @@ model.fit(
     y_train,
 )
 
-print("Γ£ô XGBoost training completed.")
+print("✓ XGBoost training completed.")
 
 
 # ============================================================
@@ -127,7 +127,7 @@ validation_probabilities = model.predict_proba(
     X_validation
 )[:, 1]
 
-print("Γ£ô Fraud probabilities generated.")
+print("✓ Fraud probabilities generated.")
 
 
 # ============================================================
@@ -222,4 +222,4 @@ print(f"Minimum probability : {validation_probabilities.min():.6f}")
 print(f"Maximum probability : {validation_probabilities.max():.6f}")
 print(f"Mean probability    : {validation_probabilities.mean():.6f}")
 
-print("\nΓ£ô XGBoost baseline completed.")
+print("\n✓ XGBoost baseline completed.")

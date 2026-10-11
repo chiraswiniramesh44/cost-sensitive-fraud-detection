@@ -131,9 +131,9 @@ print(f"Original rows : {len(df)}")
 print(f"Split rows    : {total_split_rows}")
 
 if total_split_rows == len(df):
-    print("Γ£ô All rows are accounted for.")
+    print("✓ All rows are accounted for.")
 else:
-    print("Γ£ù ERROR: Some rows are missing.")
+    print("✗ ERROR: Some rows are missing.")
 
 print(
     f"Train + Validation + Test = "

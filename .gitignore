@@ -229,3 +229,6 @@ __marimo__/
 
 # Environment variables
 .env
+!ml/reports/cost_sensitivity_results.csv
+!ml/reports/policy_comparison_results.csv
+!ml/reports/review_capacity_results.csv

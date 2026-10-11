@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+import logging
 from typing import Any
 
 from fastapi import HTTPException
@@ -13,9 +14,11 @@ from backend.app.services.prediction_persistence_service import (
     persist_prediction,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _evaluate_with_ml(features: dict[str, float]) -> dict[str, Any]:
-    """Call the existing decision engine without duplicating its logic."""
+    """Evaluate a transaction using the existing ML decision engine."""
     try:
         decision_module = importlib.import_module(
             "ml.src.decision.decision_engine"
@@ -28,8 +31,8 @@ def _evaluate_with_ml(features: dict[str, float]) -> dict[str, Any]:
         )
 
         # Temporary integration defaults.
-        # Replace these with Member 2's approved configuration
-        # before research evaluation or final project benchmarking.
+        # Replace these with the approved project configuration
+        # before final research evaluation or benchmarking.
         policy = policy_module.DecisionPolicy(
             approve_threshold=0.10,
             block_threshold=0.80,
@@ -98,12 +101,16 @@ def _evaluate_with_ml(features: dict[str, float]) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
+        # Print the complete traceback to the API container logs.
+        logger.exception("ML prediction pipeline failed")
+
+        # Keep internal exception details out of the client response.
         raise HTTPException(
             status_code=503,
             detail=(
                 "The prediction pipeline is unavailable or returned "
-                "an invalid result. Check the ML modules, model "
-                "artifacts, and decision-engine configuration."
+                "an invalid result. Check the API container logs "
+                "for the underlying exception."
             ),
         ) from exc
 
@@ -125,6 +132,9 @@ def predict_and_persist(
             user_id=current_user.id,
         )
     except Exception as exc:
+        logger.exception(
+            "Prediction evaluated, but persistence failed"
+        )
         raise HTTPException(
             status_code=500,
             detail=(

@@ -13,3 +13,4 @@ alembic
 pytest
 httpx
 shap
+xgboost

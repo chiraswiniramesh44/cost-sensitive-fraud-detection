@@ -149,3 +149,45 @@ def test_review_cost_is_reported(policy, costs):
 
     assert report["results"][0]["decision"] == Decision.REVIEW.value
     assert report["results"][0]["observed_cost"] == 12.0
+def test_approve_decision_observed_cost_is_zero_for_genuine(
+    policy, costs
+):
+    source = FakeFeedbackSource([
+        record("genuine-approve", FeedbackLabel.CONFIRMED_GENUINE.value)
+    ])
+    approval = TrainingApproval(
+        approved_transaction_ids=frozenset({"genuine-approve"})
+    )
+
+    with patch(
+        "ml.src.feedback.decision_feedback_evaluator.predict_fraud",
+        return_value=0.1,
+    ):
+        report = evaluate_approved_feedback(
+            source, approval, policy, costs
+        )
+
+    assert report["results"][0]["decision"] == Decision.APPROVE.value
+    assert report["results"][0]["observed_cost"] == 0.0
+
+
+def test_block_decision_observed_cost_for_genuine_transaction(
+    policy, costs
+):
+    source = FakeFeedbackSource([
+        record("genuine-block", FeedbackLabel.CONFIRMED_GENUINE.value)
+    ])
+    approval = TrainingApproval(
+        approved_transaction_ids=frozenset({"genuine-block"})
+    )
+
+    with patch(
+        "ml.src.feedback.decision_feedback_evaluator.predict_fraud",
+        return_value=0.9,
+    ):
+        report = evaluate_approved_feedback(
+            source, approval, policy, costs
+        )
+
+    assert report["results"][0]["decision"] == Decision.BLOCK.value
+    assert report["results"][0]["observed_cost"] == costs.block_friction_cost

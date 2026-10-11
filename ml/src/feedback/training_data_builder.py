@@ -22,30 +22,30 @@ class TrainingExample:
 def build_training_data(
     feedback_records: list[dict],
 ) -> list[TrainingExample]:
-    training_data = []
+    candidates = []
 
     for record in feedback_records:
         if not isinstance(record, dict):
             continue
 
         transaction_id = record.get("transaction_id")
-        if transaction_id is None or not str(transaction_id).strip():
+        if transaction_id is None:
             continue
 
-        label = record.get("label")
+        transaction_id = str(transaction_id).strip()
+        if not transaction_id:
+            continue
 
         try:
-            feedback_label = FeedbackLabel(label)
+            feedback_label = FeedbackLabel(record.get("label"))
         except (ValueError, TypeError):
             continue
 
         validation = validate_feedback(feedback_label)
-
         if not validation.valid or not validation.usable_for_training:
             continue
 
         features = record.get("features")
-
         if not isinstance(features, dict):
             continue
 
@@ -83,12 +83,27 @@ def build_training_data(
             else 0
         )
 
-        training_data.append(
+        candidates.append(
             TrainingExample(
-                transaction_id=str(transaction_id),
+                transaction_id=transaction_id,
                 features=validated_features,
                 label=training_label,
             )
         )
+
+    grouped = {}
+
+    for example in candidates:
+        grouped.setdefault(example.transaction_id, []).append(example)
+
+    training_data = []
+
+    for transaction_id, examples in grouped.items():
+        labels = {example.label for example in examples}
+
+        if len(labels) != 1:
+            continue
+
+        training_data.append(examples[0])
 
     return training_data

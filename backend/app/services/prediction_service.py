@@ -1,7 +1,7 @@
-
 from __future__ import annotations
 
 import importlib
+import logging
 from typing import Any
 
 from fastapi import HTTPException
@@ -12,6 +12,8 @@ from backend.app.schemas.prediction import PredictionRequest
 from backend.app.services.prediction_persistence_service import (
     persist_prediction,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _evaluate_with_ml(features: dict[str, float]) -> dict[str, Any]:
@@ -27,9 +29,8 @@ def _evaluate_with_ml(features: dict[str, float]) -> dict[str, Any]:
             "ml.src.decision.cost_matrix"
         )
 
-        # Temporary integration defaults.
-        # Replace these with Member 2's approved configuration
-        # before research evaluation or final project benchmarking.
+        # Temporary defaults; replace with Member 2's approved
+        # configuration before final evaluation.
         policy = policy_module.DecisionPolicy(
             approve_threshold=0.10,
             block_threshold=0.80,
@@ -97,15 +98,15 @@ def _evaluate_with_ml(features: dict[str, float]) -> dict[str, Any]:
 
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
+        logger.exception("Prediction pipeline failed")
         raise HTTPException(
             status_code=503,
             detail=(
                 "The prediction pipeline is unavailable or returned "
-                "an invalid result. Check the ML modules, model "
-                "artifacts, and decision-engine configuration."
+                "an invalid result. Check the server logs."
             ),
-        ) from exc
+        ) from None
 
 
 def predict_and_persist(
@@ -124,10 +125,11 @@ def predict_and_persist(
             result=result,
             user_id=current_user.id,
         )
-    except Exception as exc:
+    except Exception:
+        logger.exception("Prediction evaluated but persistence failed")
         raise HTTPException(
             status_code=500,
             detail=(
                 "The prediction was evaluated but could not be persisted."
             ),
-        ) from exc
+        ) from None

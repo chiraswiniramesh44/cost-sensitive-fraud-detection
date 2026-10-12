@@ -219,9 +219,15 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Machine Learning Models
+Machine Learning Models
+
 *.pkl
 *.joblib
+
+Allow the model artifacts required by the deployed prediction API
+
+!ml/models/xgboost_baseline.joblib
+!ml/models/preprocessor.joblib
 
 # Datasets
 *.csv

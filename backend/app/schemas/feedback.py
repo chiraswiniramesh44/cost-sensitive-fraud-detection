@@ -1,4 +1,5 @@
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -27,5 +28,13 @@ class FeedbackResponse(BaseModel):
     decision: str
     reason_code: str
     comment: str | None
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FeedbackListResponse(BaseModel):
+    items: list[FeedbackResponse]
+    total: int
+    limit: int
+    offset: int

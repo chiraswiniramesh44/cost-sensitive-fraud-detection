@@ -23,28 +23,14 @@ def _evaluate_with_ml(features: dict[str, float]) -> dict[str, Any]:
         decision_module = importlib.import_module(
             "ml.src.decision.decision_engine"
         )
-        policy_module = importlib.import_module(
-            "ml.src.decision.policy"
-        )
-        cost_module = importlib.import_module(
-            "ml.src.decision.cost_matrix"
+        defaults_module = importlib.import_module(
+            "ml.src.decision.defaults"
         )
 
-        # Temporary integration defaults.
-        # Replace these with the approved project configuration
-        # before final research evaluation or benchmarking.
-        policy = policy_module.DecisionPolicy(
-            approve_threshold=0.10,
-            block_threshold=0.80,
-        )
-
-        cost_matrix = cost_module.CostMatrix(
-            review_cost=1.0,
-            block_friction_cost=5.0,
-            missed_fraud_cost=100.0,
-            residual_risk_cost=20.0,
-            block_cost=0.0,
-        )
+        # Approved Member 2 research defaults (policy_comparison /
+        # cost_sensitivity baseline_reference artifacts).
+        policy = defaults_module.approved_decision_policy()
+        cost_matrix = defaults_module.approved_cost_matrix()
 
         result = decision_module.evaluate_transaction(
             transaction=features,

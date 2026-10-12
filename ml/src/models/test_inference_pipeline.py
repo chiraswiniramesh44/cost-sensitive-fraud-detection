@@ -5,9 +5,7 @@ from pathlib import Path
 import joblib
 import pytest
 
-from ml.src.decision.cost_matrix import CostMatrix
 from ml.src.decision.decision_engine import evaluate_transaction
-from ml.src.decision.policy import DecisionPolicy
 from ml.src.models.inference import predict_fraud
 
 
@@ -59,7 +57,14 @@ def test_predict_fraud_rejects_non_finite_values():
 
 def test_evaluate_transaction_review_band_with_real_model():
     # Use zero-filled PCA features; scale=2 was measured to land in the
-    # review band for approve_threshold=0.10 / block_threshold=0.80.
+    # review band for the approved 0.02 / 0.98 three-way policy.
+    from ml.src.decision.defaults import (
+        APPROVE_THRESHOLD,
+        BLOCK_THRESHOLD,
+        approved_cost_matrix,
+        approved_decision_policy,
+    )
+
     tx = {
         "Time": 50000.0,
         "Amount": 500.0,
@@ -71,19 +76,13 @@ def test_evaluate_transaction_review_band_with_real_model():
     tx["V17"] = -0.8
     tx["V4"] = 1.0
 
-    policy = DecisionPolicy(approve_threshold=0.10, block_threshold=0.80)
-    cost_matrix = CostMatrix(
-        review_cost=1.0,
-        block_friction_cost=5.0,
-        missed_fraud_cost=100.0,
-        residual_risk_cost=20.0,
-        block_cost=0.0,
-    )
+    policy = approved_decision_policy()
+    cost_matrix = approved_cost_matrix()
 
     probability = predict_fraud(tx)
     result = evaluate_transaction(tx, policy, cost_matrix, top_k=3)
 
-    assert 0.10 <= probability < 0.80, (
+    assert APPROVE_THRESHOLD <= probability < BLOCK_THRESHOLD, (
         f"Fixture probability {probability} left the review band; "
         "update the synthetic features rather than changing thresholds."
     )
@@ -96,8 +95,14 @@ def test_evaluate_transaction_review_band_with_real_model():
 
 
 def test_evaluate_transaction_approve_for_low_risk_synthetic():
-    policy = DecisionPolicy(approve_threshold=0.10, block_threshold=0.80)
-    cost_matrix = CostMatrix(1.0, 5.0, 100.0, 20.0, 0.0)
+    from ml.src.decision.defaults import (
+        APPROVE_THRESHOLD,
+        approved_cost_matrix,
+        approved_decision_policy,
+    )
+
+    policy = approved_decision_policy()
+    cost_matrix = approved_cost_matrix()
     result = evaluate_transaction(
         synthetic_transaction(),
         policy,
@@ -105,4 +110,4 @@ def test_evaluate_transaction_approve_for_low_risk_synthetic():
         top_k=2,
     )
     assert result["decision"] == "APPROVE"
-    assert result["fraud_probability"] < 0.10
+    assert result["fraud_probability"] < APPROVE_THRESHOLD

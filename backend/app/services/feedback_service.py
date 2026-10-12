@@ -1,6 +1,8 @@
 
+from uuid import UUID
+
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.models.audit_log import AuditLog
@@ -9,6 +11,39 @@ from backend.app.models.prediction import Prediction
 from backend.app.models.transaction import Transaction
 from backend.app.models.user import User
 from backend.app.schemas.feedback import FeedbackRequest
+
+
+def list_feedback(
+    db: Session,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    transaction_id: UUID | None = None,
+) -> tuple[list[OperatorFeedback], int]:
+    """Return paginated operator feedback, newest first."""
+    query = select(OperatorFeedback)
+
+    if transaction_id is not None:
+        query = query.where(
+            OperatorFeedback.transaction_id == transaction_id
+        )
+
+    total = db.scalar(
+        select(func.count()).select_from(query.subquery())
+    ) or 0
+
+    rows = list(
+        db.scalars(
+            query.order_by(
+                OperatorFeedback.created_at.desc(),
+                OperatorFeedback.id.desc(),
+            )
+            .offset(offset)
+            .limit(limit)
+        ).all()
+    )
+
+    return rows, int(total)
 
 
 def submit_feedback(

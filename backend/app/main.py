@@ -1,7 +1,7 @@
 
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.auth import router as auth_router
@@ -41,7 +41,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_methods=[
+        "GET",
+        "HEAD",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+    ],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -65,6 +73,18 @@ def root() -> dict[str, str]:
         "docs": "/docs",
         "health": "/health",
     }
+
+
+@app.head("/", include_in_schema=False)
+def head_root() -> Response:
+    """Return headers without a response body."""
+    return Response(status_code=200)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    """Return no content when no favicon is configured."""
+    return Response(status_code=204)
 
 
 @app.get("/health", tags=["Health"])

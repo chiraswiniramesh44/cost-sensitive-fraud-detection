@@ -12,5 +12,5 @@ python-multipart
 alembic
 pytest
 httpx
-shap
-xgboost
+shap==0.50.0
+xgboost==3.4.1

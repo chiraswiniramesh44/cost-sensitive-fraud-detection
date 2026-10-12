@@ -127,4 +127,3 @@ This supports the central research direction of combining:
 * and subsequent operator feedback.
 
 The final cost-sensitive policy and feedback-loop experiments will be integrated according to the shared Member-1/Member-2 contracts defined in the project master plan.
-

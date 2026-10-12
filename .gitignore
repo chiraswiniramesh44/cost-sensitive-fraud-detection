@@ -237,6 +237,10 @@ __marimo__/
 # Environment variables
 .env
 
+# Local operator feedback database
+operator_feedback.sqlite3
+operator_feedback.sqlite3-journal
+
 # Local comparison / scratch files (do not commit)
 backend-comparison.txt
 git-status.txt

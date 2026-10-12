@@ -13,4 +13,6 @@ COPY database /app/database
 COPY ml /app/ml
 COPY alembic.ini /app/alembic.ini
 
-CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+EXPOSE 8000
+
+CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

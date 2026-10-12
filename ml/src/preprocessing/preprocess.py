@@ -120,7 +120,7 @@ if TARGET_COLUMN not in validation_df.columns:
 if TARGET_COLUMN not in test_df.columns:
     raise ValueError("Target column 'Class' missing from test data.")
 
-print("Γ£ô Feature and target columns are valid.")
+print("✓ Feature and target columns are valid.")
 
 
 # ============================================================
@@ -138,7 +138,7 @@ if X_validation.isnull().sum().sum() != 0:
 if X_test.isnull().sum().sum() != 0:
     raise ValueError("Missing values found in test features.")
 
-print("Γ£ô No missing values found.")
+print("✓ No missing values found.")
 
 
 # ============================================================
@@ -268,7 +268,7 @@ print(TRAIN_PROCESSED_PATH)
 print(VALIDATION_PROCESSED_PATH)
 print(TEST_PROCESSED_PATH)
 
-print("\nΓ£ô Leakage-safe preprocessing completed successfully.")
-print("Γ£ô Scaler fitted only on training data.")
-print("Γ£ô Validation data was transformed only.")
-print("Γ£ô Test data was transformed only.")
+print("\n✓ Leakage-safe preprocessing completed successfully.")
+print("✓ Scaler fitted only on training data.")
+print("✓ Validation data was transformed only.")
+print("✓ Test data was transformed only.")

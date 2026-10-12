@@ -17,7 +17,6 @@ from backend.app.services.database_health_service import (
     check_database_connection,
 )
 
-
 app = FastAPI(
     title="Cost-Sensitive Fraud Detection API",
     description=(
@@ -27,7 +26,6 @@ app = FastAPI(
     ),
     version="1.0.0",
 )
-
 
 # CORS configuration
 origins = [
@@ -55,8 +53,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-
-# Register existing API routers
+# Register API routers
 app.include_router(auth_router)
 app.include_router(predictions_router)
 app.include_router(review_queue_router)
@@ -67,7 +64,6 @@ app.include_router(model_admin_router)
 app.include_router(audit_logs_router)
 
 
-# Root endpoint
 @app.get("/", tags=["Health"])
 def root() -> dict[str, str]:
     """Return basic API information."""
@@ -79,21 +75,18 @@ def root() -> dict[str, str]:
     }
 
 
-# Support HEAD requests to the root endpoint
 @app.head("/", include_in_schema=False)
 def head_root() -> Response:
     """Return headers without a response body."""
     return Response(status_code=200)
 
 
-# Handle browser favicon requests without a 404
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon() -> Response:
     """Return no content when no favicon is configured."""
     return Response(status_code=204)
 
 
-# API and database health check
 @app.get("/health", tags=["Health"])
 def health_check() -> dict[str, str]:
     """Check API and database availability."""

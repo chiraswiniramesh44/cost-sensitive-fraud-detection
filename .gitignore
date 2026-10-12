@@ -228,3 +228,6 @@ __marimo__/
 
 # Environment variables
 .env
+
+# Local database backup
+fraud_db_backup.dump

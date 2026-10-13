@@ -7,12 +7,14 @@ import {
 } from "react-router-dom";
 
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import RiskAnalytics from "./pages/RiskAnalytics";
 import ReviewQueue from "./pages/ReviewQueue";
 import CaseDetail from "./pages/CaseDetail";
 import FeedbackAnalytics from "./pages/FeedbackAnalytics";
 import ModelMonitoring from "./pages/ModelMonitoring";
+import PredictTransaction from "./pages/PredictTransaction";
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -36,6 +38,20 @@ function App() {
         <Route
           path="/login"
           element={<Login />}
+        />
+
+        <Route
+          path="/register"
+          element={<Register />}
+        />
+
+        <Route
+          path="/predict-transaction"
+          element={
+            <ProtectedRoute>
+              <PredictTransaction />
+            </ProtectedRoute>
+          }
         />
 
         <Route

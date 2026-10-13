@@ -1,18 +1,26 @@
+
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
 
   const [formData, setFormData] = useState({
-    email: "",
+    email: location.state?.email || "",
     password: "",
   });
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const registered = location.state?.registered === true;
 
   const handleChange = (event) => {
     setFormData({
@@ -28,7 +36,7 @@ function Login() {
 
     try {
       await login(formData);
-      navigate("/dashboard");
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(
         err.response?.data?.detail ||
@@ -43,13 +51,17 @@ function Login() {
     <div className="login-page">
       <div className="login-card">
         <h1>Fraud Detection System</h1>
-
         <p>Operator Login</p>
+
+        {registered && (
+          <p style={{ color: "green" }} role="status">
+            Registration successful! You can now log in.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div>
             <label htmlFor="email">Email</label>
-
             <input
               id="email"
               name="email"
@@ -57,13 +69,13 @@ function Login() {
               value={formData.email}
               onChange={handleChange}
               placeholder="Enter your email"
+              autoComplete="email"
               required
             />
           </div>
 
           <div>
             <label htmlFor="password">Password</label>
-
             <input
               id="password"
               name="password"
@@ -71,16 +83,25 @@ function Login() {
               value={formData.password}
               onChange={handleChange}
               placeholder="Enter your password"
+              autoComplete="current-password"
               required
             />
           </div>
 
-          {error && <p className="login-error">{error}</p>}
+          {error && (
+            <p className="login-error" role="alert">
+              {error}
+            </p>
+          )}
 
           <button type="submit" disabled={loading}>
             {loading ? "Signing in..." : "Login"}
           </button>
         </form>
+
+        <p>
+          Don't have an account? <Link to="/register">Register</Link>
+        </p>
       </div>
     </div>
   );

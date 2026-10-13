@@ -1,3 +1,4 @@
+
 import { NavLink } from "react-router-dom";
 
 function Sidebar() {
@@ -10,6 +11,10 @@ function Sidebar() {
       <nav className="sidebar-nav">
         <NavLink to="/dashboard">
           Dashboard
+        </NavLink>
+
+        <NavLink to="/predict-transaction">
+          Predict Transaction
         </NavLink>
 
         <NavLink to="/risk-analytics">

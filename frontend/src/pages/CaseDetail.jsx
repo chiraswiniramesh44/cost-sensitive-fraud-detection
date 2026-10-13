@@ -1,7 +1,8 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
+import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import RiskBadge from "../components/RiskBadge";
@@ -9,149 +10,221 @@ import DecisionBadge from "../components/DecisionBadge";
 import FeedbackForm from "../components/FeedbackForm";
 import ShapExplanation from "../components/ShapExplanation";
 
-const demoCases = {
-  "DEMO-1001": {
-    id: "DEMO-1001",
-    amount: 18500,
-    probability: 0.942,
-    risk: "HIGH",
-    decision: "BLOCK",
-    threshold: 0.75,
-    expectedCost: 1200,
-    modelVersion: "DEMO-1.0",
-    reason: "Unusual transaction amount",
-    features: [
-      { name: "Transaction amount", value: 0.82 },
-      { name: "Transaction frequency", value: 0.61 },
-      { name: "Time of transaction", value: 0.34 },
-    ],
-  },
-  "DEMO-1002": {
-    id: "DEMO-1002",
-    amount: 7200,
-    probability: 0.685,
-    risk: "MEDIUM",
-    decision: "REVIEW",
-    threshold: 0.75,
-    expectedCost: 650,
-    modelVersion: "DEMO-1.0",
-    reason: "Unusual transaction pattern",
-    features: [
-      { name: "Transaction amount", value: 0.51 },
-      { name: "Transaction frequency", value: 0.72 },
-      { name: "Time of transaction", value: 0.29 },
-    ],
-  },
-  "DEMO-1003": {
-    id: "DEMO-1003",
-    amount: 950,
-    probability: 0.081,
-    risk: "LOW",
-    decision: "APPROVE",
-    threshold: 0.75,
-    expectedCost: 25,
-    modelVersion: "DEMO-1.0",
-    reason: "Low estimated risk",
-    features: [
-      { name: "Transaction amount", value: 0.08 },
-      { name: "Transaction frequency", value: 0.12 },
-      { name: "Time of transaction", value: 0.10 },
-    ],
-  },
-  "DEMO-1004": {
-    id: "DEMO-1004",
-    amount: 26500,
-    probability: 0.887,
-    risk: "HIGH",
-    decision: "BLOCK",
-    threshold: 0.75,
-    expectedCost: 1800,
-    modelVersion: "DEMO-1.0",
-    reason: "High estimated fraud probability",
-    features: [
-      { name: "Transaction amount", value: 0.91 },
-      { name: "Transaction frequency", value: 0.67 },
-      { name: "Time of transaction", value: 0.42 },
-    ],
-  },
-  "DEMO-1005": {
-    id: "DEMO-1005",
-    amount: 4300,
-    probability: 0.514,
-    risk: "MEDIUM",
-    decision: "REVIEW",
-    threshold: 0.75,
-    expectedCost: 420,
-    modelVersion: "DEMO-1.0",
-    reason: "Requires operator assessment",
-    features: [
-      { name: "Transaction amount", value: 0.34 },
-      { name: "Transaction frequency", value: 0.58 },
-      { name: "Time of transaction", value: 0.47 },
-    ],
-  },
-  "DEMO-1006": {
-    id: "DEMO-1006",
-    amount: 1200,
-    probability: 0.12,
-    risk: "LOW",
-    decision: "APPROVE",
-    threshold: 0.75,
-    expectedCost: 35,
-    modelVersion: "DEMO-1.0",
-    reason: "Low estimated risk",
-    features: [
-      { name: "Transaction amount", value: 0.11 },
-      { name: "Transaction frequency", value: 0.14 },
-      { name: "Time of transaction", value: 0.09 },
-    ],
-  },
-};
-
 function formatCurrency(value) {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "—";
+  }
+
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 2,
-  }).format(value);
+  }).format(number);
+}
+
+function formatProbability(value) {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  let number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "—";
+  }
+
+  if (number > 1 && number <= 100) {
+    number /= 100;
+  }
+
+  if (number < 0 || number > 1) {
+    return "—";
+  }
+
+  return `${(number * 100).toFixed(2)}%`;
+}
+
+function getDecision(value) {
+  const decision = String(value ?? "").trim().toUpperCase();
+
+  if (["APPROVE", "APPROVED"].includes(decision)) {
+    return "APPROVE";
+  }
+
+  if (["REVIEW", "REVIEW_REQUIRED"].includes(decision)) {
+    return "REVIEW";
+  }
+
+  if (["BLOCK", "BLOCKED"].includes(decision)) {
+    return "BLOCK";
+  }
+
+  return value ?? "—";
+}
+
+function getRisk(value) {
+  const risk = String(value ?? "").trim().toUpperCase();
+
+  return ["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(risk)
+    ? risk
+    : "UNKNOWN";
+}
+
+function getErrorMessage(err) {
+  const detail = err?.response?.data?.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) =>
+        typeof item === "string"
+          ? item
+          : item?.msg ?? JSON.stringify(item)
+      )
+      .join(", ");
+  }
+
+  if (detail && typeof detail === "object") {
+    return JSON.stringify(detail);
+  }
+
+  return err?.message ?? "An unexpected error occurred.";
 }
 
 function CaseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const transaction = demoCases[id];
-
+  const [transaction, setTransaction] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackError, setFeedbackError] = useState("");
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
-  if (!transaction) {
-    return (
-      <div className="app-layout">
-        <Sidebar />
-        <div className="main-area">
-          <Navbar />
-          <main className="page-content">
-            <h1>Case not found</h1>
-            <p>
-              This case is not present in the local demo dataset.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate("/review-queue")}
-            >
-              Back to Review Queue
-            </button>
-          </main>
-        </div>
-      </div>
-    );
+  useEffect(() => {
+    let active = true;
+
+    async function loadCase() {
+      setLoading(true);
+      setError("");
+      setTransaction(null);
+
+      try {
+        const response = await api.get(
+          `/transactions/${encodeURIComponent(id)}`
+        );
+
+        if (!active) {
+          return;
+        }
+
+        const data =
+          response.data?.item ??
+          response.data?.data ??
+          response.data;
+
+        setTransaction(data);
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+
+        setError(
+          err.response?.status === 404
+            ? "Transaction not found."
+            : getErrorMessage(err)
+        );
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    if (id) {
+      loadCase();
+    } else {
+      setError("Transaction ID is missing.");
+      setLoading(false);
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  async function handleFeedback({
+    transactionId,
+    feedback,
+    operatorDecision,
+    reasonCode,
+    comment,
+  }) {
+    setSubmittingFeedback(true);
+    setFeedbackMessage("");
+    setFeedbackError("");
+
+    try {
+      const payload = {
+        transaction_id:
+          transactionId ?? transaction?.transaction_id ?? id,
+        operator_decision: String(operatorDecision ?? "")
+          .trim()
+          .toUpperCase(),
+        reason_code: String(reasonCode ?? "")
+          .trim()
+          .toUpperCase(),
+        feedback: String(feedback ?? "")
+          .trim()
+          .toUpperCase(),
+        comment: String(comment ?? "").trim(),
+      };
+
+      if (
+        !payload.transaction_id ||
+        !payload.operator_decision ||
+        !payload.reason_code ||
+        !payload.feedback
+      ) {
+        throw new Error("Please complete all required feedback fields.");
+      }
+
+      const response = await api.post("/feedback", payload);
+
+      setFeedbackMessage(
+        response.data?.message ??
+          "Feedback submitted successfully."
+      );
+
+      return response.data;
+    } catch (err) {
+      setFeedbackError(getErrorMessage(err));
+      throw err;
+    } finally {
+      setSubmittingFeedback(false);
+    }
   }
 
-  const handleFeedback = (result) => {
-    setFeedbackMessage(
-      `Demo feedback recorded locally: ${result}`
-    );
-  };
+  const prediction = transaction?.prediction ?? {};
+
+  const rawExplanation =
+    prediction.shap_explanation ??
+    prediction.explanation ??
+    prediction.feature_importance;
+
+  const explanation = Array.isArray(rawExplanation)
+    ? rawExplanation
+    : [];
 
   return (
     <div className="app-layout">
@@ -165,104 +238,169 @@ function CaseDetail() {
             <div>
               <h1>Case Details</h1>
               <p>
-                Transaction ID: <strong>{transaction.id}</strong>
+                Transaction ID: <strong>{id || "—"}</strong>
               </p>
             </div>
 
-            <span className="data-status">DEMO DATA ONLY</span>
+            <span className="data-status">
+              {loading
+                ? "LOADING DATA"
+                : transaction
+                  ? "LIVE API DATA"
+                  : "UNAVAILABLE"}
+            </span>
           </div>
 
-          <div className="dashboard-info">
-            <p>
-              This case uses synthetic sample data. Its risk
-              score, expected cost, and feature values are
-              illustrative and are not model predictions.
-            </p>
-          </div>
-
-          <section className="stats-grid">
+          {loading && (
             <div className="dashboard-card">
-              <h3>Transaction Amount</h3>
-              <h2>{formatCurrency(transaction.amount)}</h2>
+              <p>Loading transaction details...</p>
             </div>
+          )}
 
-            <div className="dashboard-card">
-              <h3>Fraud Probability</h3>
-              <h2>
-                {(transaction.probability * 100).toFixed(1)}%
-              </h2>
+          {!loading && error && (
+            <div className="dashboard-info" role="alert">
+              <p>{error}</p>
+
+              <button
+                type="button"
+                onClick={() => navigate("/review-queue")}
+              >
+                Back to Review Queue
+              </button>
             </div>
+          )}
 
-            <div className="dashboard-card">
-              <h3>Risk Level</h3>
-              <RiskBadge level={transaction.risk} />
-            </div>
+          {!loading && transaction && (
+            <>
+              <section className="stats-grid">
+                <div className="dashboard-card">
+                  <h3>Transaction Amount</h3>
+                  <h2>{formatCurrency(transaction.amount)}</h2>
+                </div>
 
-            <div className="dashboard-card">
-              <h3>System Decision</h3>
-              <DecisionBadge decision={transaction.decision} />
-            </div>
-          </section>
+                <div className="dashboard-card">
+                  <h3>Fraud Probability</h3>
+                  <h2>
+                    {formatProbability(prediction.fraud_probability)}
+                  </h2>
+                </div>
 
-          <section className="dashboard-grid">
-            <div className="dashboard-card">
-              <h2>Decision Information</h2>
+                <div className="dashboard-card">
+                  <h3>Risk Level</h3>
+                  <RiskBadge
+                    level={getRisk(prediction.risk_level)}
+                  />
+                </div>
 
-              <p>
-                <strong>Threshold:</strong>{" "}
-                {(transaction.threshold * 100).toFixed(0)}%
-              </p>
+                <div className="dashboard-card">
+                  <h3>System Decision</h3>
+                  <DecisionBadge
+                    decision={getDecision(prediction.decision)}
+                  />
+                </div>
+              </section>
 
-              <p>
-                <strong>Illustrative expected cost:</strong>{" "}
-                {formatCurrency(transaction.expectedCost)}
-              </p>
+              <section className="dashboard-grid">
+                <div className="dashboard-card">
+                  <h2>Decision Information</h2>
 
-              <p>
-                <strong>Model version:</strong>{" "}
-                {transaction.modelVersion}
-              </p>
+                  <p>
+                    <strong>External ID:</strong>{" "}
+                    {transaction.external_id ?? "—"}
+                  </p>
 
-              <p>
-                <strong>Sample reason:</strong>{" "}
-                {transaction.reason}
-              </p>
-            </div>
+                  <p>
+                    <strong>Expected Cost:</strong>{" "}
+                    {formatCurrency(prediction.expected_cost)}
+                  </p>
 
-            <div className="dashboard-card">
-              <h2>Feature Explanation</h2>
-              <p>
-                Illustrative feature values for UI testing.
-                These are not actual SHAP values.
-              </p>
+                  <p>
+                    <strong>Model Version:</strong>{" "}
+                    {prediction.model_version ?? "—"}
+                  </p>
 
-              <ShapExplanation
-                explanation={transaction.features}
-              />
-            </div>
-          </section>
+                  <p>
+                    <strong>Prediction Created At:</strong>{" "}
+                    {prediction.created_at
+                      ? new Date(
+                          prediction.created_at
+                        ).toLocaleString("en-IN")
+                      : "—"}
+                  </p>
 
-          <section className="dashboard-card">
-            <h2>Operator Feedback</h2>
+                  <p>
+                    <strong>Transaction Created At:</strong>{" "}
+                    {transaction.created_at
+                      ? new Date(
+                          transaction.created_at
+                        ).toLocaleString("en-IN")
+                      : "—"}
+                  </p>
+                </div>
 
-            <p>
-              Select a feedback label to demonstrate the
-              operator feedback workflow.
-            </p>
+                <div className="dashboard-card">
+                  <h2>Feature Explanation</h2>
 
-            <FeedbackForm onSubmit={handleFeedback} />
+                  {explanation.length > 0 ? (
+                    <ShapExplanation
+                      explanation={explanation}
+                    />
+                  ) : (
+                    <p>
+                      SHAP explanation data is not available in the
+                      transaction response. Transaction input
+                      features are not SHAP contributions.
+                    </p>
+                  )}
 
-            {feedbackMessage && (
-              <div className="dashboard-info">
-                <p>{feedbackMessage}</p>
+                  <details>
+                    <summary>View transaction features</summary>
+
+                    <ul>
+                      {Object.entries(
+                        transaction.features ?? {}
+                      ).map(([name, value]) => (
+                        <li key={name}>
+                          <strong>{name}:</strong>{" "}
+                          {String(value)}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                </div>
+              </section>
+
+              <section className="dashboard-card">
+                <h2>Operator Feedback</h2>
+
                 <p>
-                  This feedback is held only in the current
-                  page state. It has not been saved to a
-                  database or sent to the backend.
+                  Submit your decision and observations for this
+                  transaction.
                 </p>
-              </div>
-            )}
-          </section>
+
+                <FeedbackForm
+                  transactionId={transaction.transaction_id ?? id}
+                  onSubmit={handleFeedback}
+                />
+
+                {submittingFeedback && (
+                  <p>Submitting feedback...</p>
+                )}
+
+                {feedbackMessage && (
+                  <div className="dashboard-info" role="status">
+                    <p>{feedbackMessage}</p>
+                  </div>
+                )}
+
+                {feedbackError && (
+                  <div className="dashboard-info" role="alert">
+                    <p>{feedbackError}</p>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
 
           <button
             type="button"

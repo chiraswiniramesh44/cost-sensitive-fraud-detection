@@ -12,12 +12,69 @@ from backend.app.models.audit_log import AuditLog
 from backend.app.models.model_registry import ModelRegistry
 from backend.app.models.user import User
 
+# Member 1 final held-out test metrics for model version xgb-cost-v1
+# (42,721 test transactions). Source: ml/reports/final_test_results.csv
+# and ml/reports/member1_handoff.md. Do not recompute or substitute.
+XGB_COST_V1_VERSION = "xgb-cost-v1"
+XGB_COST_V1_METRICS: dict[str, float] = {
+    "precision": 0.8125,
+    "recall": 0.7500,
+    "f1_score": 0.7800,
+    "pr_auc": 0.768924,
+    "roc_auc": 0.978265,
+}
+
 
 def get_current_model(db: Session) -> ModelRegistry | None:
     return db.scalar(
         select(ModelRegistry)
         .where(ModelRegistry.active.is_(True))
         .order_by(ModelRegistry.trained_at.desc())
+    )
+
+
+def ensure_model_metrics(
+    db: Session,
+    version: str,
+    metrics: dict[str, Any],
+) -> ModelRegistry:
+    """Idempotently set metrics_json for an existing registry version.
+
+    Does not create rows, change active flags, or modify other versions.
+    """
+    model = db.scalar(
+        select(ModelRegistry).where(ModelRegistry.version == version)
+    )
+
+    if model is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Model version '{version}' is not registered.",
+        )
+
+    if model.metrics_json == metrics:
+        return model
+
+    was_active = model.active
+    model.metrics_json = dict(metrics)
+    db.flush()
+
+    # Guard against accidental active-flag drift during the update.
+    if model.active != was_active:
+        model.active = was_active
+        db.flush()
+
+    db.commit()
+    db.refresh(model)
+    return model
+
+
+def ensure_xgb_cost_v1_metrics(db: Session) -> ModelRegistry:
+    """Populate Member 1 evaluation metrics for the production baseline."""
+    return ensure_model_metrics(
+        db=db,
+        version=XGB_COST_V1_VERSION,
+        metrics=XGB_COST_V1_METRICS,
     )
 
 

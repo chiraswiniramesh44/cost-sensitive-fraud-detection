@@ -158,6 +158,7 @@ function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [cost, setCost] = useState(null);
   const [recentCases, setRecentCases] = useState([]);
+  const [datasetStats, setDatasetStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [casesLoading, setCasesLoading] = useState(true);
   const [error, setError] = useState("");

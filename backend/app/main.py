@@ -12,6 +12,7 @@ from backend.app.api.dashboard import router as dashboard_router
 from backend.app.api.models import router as models_router
 from backend.app.api.model_admin import router as model_admin_router
 from backend.app.api.audit_logs import router as audit_logs_router
+from backend.app.api.dataset_stats import router as dataset_stats_router
 
 from backend.app.services.database_health_service import (
     check_database_connection,
@@ -62,6 +63,7 @@ app.include_router(dashboard_router)
 app.include_router(models_router)
 app.include_router(model_admin_router)
 app.include_router(audit_logs_router)
+app.include_router(dataset_stats_router)
 
 
 @app.get("/", tags=["Health"])

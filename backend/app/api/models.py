@@ -68,7 +68,8 @@ def list_models(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN")),
+    # Read-only history for operators; register/activate stay ADMIN-only.
+    current_user: User = Depends(require_roles("ADMIN", "OPERATOR")),
 ) -> ModelListResponse:
     if not 1 <= limit <= 200:
         raise HTTPException(

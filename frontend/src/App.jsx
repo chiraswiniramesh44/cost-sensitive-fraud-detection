@@ -46,19 +46,19 @@ function App() {
         />
 
         <Route
-          path="/predict-transaction"
+          path="/dashboard"
           element={
             <ProtectedRoute>
-              <PredictTransaction />
+              <Dashboard />
             </ProtectedRoute>
           }
         />
 
         <Route
-          path="/dashboard"
+          path="/predict-transaction"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <PredictTransaction />
             </ProtectedRoute>
           }
         />

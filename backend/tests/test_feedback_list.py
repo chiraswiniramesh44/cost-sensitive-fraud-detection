@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import text
 
 from backend.app.core.security import hash_password
+from backend.app.db.session import SessionLocal
 from backend.app.models.audit_log import AuditLog
 from backend.app.models.operator_feedback import OperatorFeedback
 from backend.app.models.prediction import Prediction
@@ -19,10 +20,8 @@ from backend.app.services.feedback_service import (
 )
 
 
-def _db_available() -> bool:
+def _db_available():
     try:
-        from backend.app.db.session import SessionLocal
-
         db = SessionLocal()
         try:
             db.execute(text("SELECT 1"))
@@ -38,8 +37,6 @@ def _db_available() -> bool:
     reason="Configured database is unavailable",
 )
 def test_feedback_persists_and_is_retrievable_from_database():
-    from backend.app.db.session import SessionLocal
-
     db = SessionLocal()
     email = f"qa-feedback-{uuid4().hex[:8]}@example.com"
     user_id = None
@@ -57,7 +54,7 @@ def test_feedback_persists_and_is_retrievable_from_database():
 
         transaction = Transaction(
             user_id=user.id,
-            external_id=f"qa-feedback-{uuid4().hex[:12]}",
+            external_id=f"qa-{uuid4().hex}",
             payload_json={"Amount": 42.0},
             amount=42.0,
         )
@@ -65,16 +62,15 @@ def test_feedback_persists_and_is_retrievable_from_database():
         db.flush()
         transaction_id = transaction.id
 
-        db.add(
-            Prediction(
-                transaction_id=transaction.id,
-                model_version="xgb-cost-v1",
-                probability=0.35,
-                risk_level="MEDIUM",
-                decision="REVIEW",
-                expected_cost=7.5,
-            )
+        prediction = Prediction(
+            transaction_id=transaction.id,
+            model_version="xgb-cost-v1",
+            probability=0.35,
+            risk_level="MEDIUM",
+            decision="REVIEW",
+            expected_cost=7.5,
         )
+        db.add(prediction)
         db.commit()
 
         feedback = submit_feedback(
@@ -87,16 +83,18 @@ def test_feedback_persists_and_is_retrievable_from_database():
             ),
             current_user=user,
         )
-
         feedback_id = feedback.id
 
+        db.commit()
+        db.expire_all()
+
         rows, total = list_feedback(
-    db=db,
-    user_id=user.id,
-    limit=50,
-    offset=0,
-    transaction_id=transaction.id,
-)
+            db=db,
+            user_id=user.id,
+            limit=50,
+            offset=0,
+            transaction_id=transaction.id,
+        )
 
         assert total == 1
         assert len(rows) == 1

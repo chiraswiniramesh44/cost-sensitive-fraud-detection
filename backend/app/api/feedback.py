@@ -1,3 +1,4 @@
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
@@ -52,9 +53,11 @@ def read_feedback(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> FeedbackListResponse:
-    """List persisted operator feedback, optionally filtered by transaction."""
+    """List the current user's feedback, optionally filtered by transaction."""
+
     rows, total = list_feedback(
         db=db,
+        user_id=current_user.id,
         limit=limit,
         offset=offset,
         transaction_id=transaction_id,

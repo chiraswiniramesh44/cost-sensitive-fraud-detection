@@ -50,23 +50,24 @@ def get_transaction(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Retrieve a transaction and its latest prediction."""
+    """Retrieve the current user's transaction and its latest prediction."""
 
-    transaction = None
+    transaction_query = select(Transaction).where(
+        Transaction.user_id == current_user.id
+    )
 
-    # First try the database transaction UUID.
     try:
         transaction_uuid = UUID(transaction_id)
     except ValueError:
         transaction_uuid = None
 
     if transaction_uuid is not None:
-        transaction = db.get(Transaction, transaction_uuid)
-
-    # If it is not a UUID, or no UUID matched, try the external ID.
-    if transaction is None:
         transaction = db.scalar(
-            select(Transaction).where(
+            transaction_query.where(Transaction.id == transaction_uuid)
+        )
+    else:
+        transaction = db.scalar(
+            transaction_query.where(
                 Transaction.external_id == transaction_id
             )
         )

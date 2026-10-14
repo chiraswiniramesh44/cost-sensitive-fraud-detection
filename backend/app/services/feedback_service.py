@@ -16,12 +16,16 @@ from backend.app.schemas.feedback import FeedbackRequest
 def list_feedback(
     db: Session,
     *,
+    user_id: UUID,
     limit: int = 50,
     offset: int = 0,
     transaction_id: UUID | None = None,
 ) -> tuple[list[OperatorFeedback], int]:
-    """Return paginated operator feedback, newest first."""
-    query = select(OperatorFeedback)
+    """Return the current user's paginated feedback, newest first."""
+
+    query = select(OperatorFeedback).where(
+        OperatorFeedback.user_id == user_id
+    )
 
     if transaction_id is not None:
         query = query.where(
@@ -51,10 +55,12 @@ def submit_feedback(
     request: FeedbackRequest,
     current_user: User,
 ) -> OperatorFeedback:
-    """Persist operator feedback and its audit record atomically."""
+    """Persist feedback and its audit record atomically."""
+
     transaction = db.scalar(
         select(Transaction).where(
-            Transaction.id == request.transaction_id
+            Transaction.id == request.transaction_id,
+            Transaction.user_id == current_user.id,
         )
     )
 
@@ -97,6 +103,7 @@ def submit_feedback(
             reason_code=reason_code,
             comment=comment or None,
         )
+
         db.add(feedback)
         db.flush()
 

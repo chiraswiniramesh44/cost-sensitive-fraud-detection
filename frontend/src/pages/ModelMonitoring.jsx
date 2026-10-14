@@ -1,5 +1,4 @@
-
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -16,16 +15,16 @@ import Sidebar from "../components/Sidebar";
 import StatCard from "../components/StatCard";
 import api from "../services/api";
 
-const MODEL_VERSION = "xgb-cost-v1";
+const MODEL_VERSION_FALLBACK = "xgb-cost-v1";
 
-const TEST_RESULTS = {
+const SAVED_TEST_RESULTS = {
   model: "XGBoost",
   dataset: "ULB Credit Card Fraud Detection",
   split: "test",
   threshold: 0.5,
   precision: 0.8125,
   recall: 0.75,
-  f1: 0.78,
+  f1_score: 0.78,
   roc_auc: 0.9782647102832718,
   pr_auc: 0.7689240183986886,
   tn: 42660,
@@ -37,7 +36,7 @@ const TEST_RESULTS = {
   expected_cost: 1345,
 };
 
-const COST_SCENARIOS = [
+const SAVED_COST_SCENARIOS = [
   {
     scenario: "Baseline reference",
     reviewCost: 2,
@@ -78,53 +77,41 @@ const COST_SCENARIOS = [
 
 function formatDate(value) {
   if (!value) return "—";
-
   const date = new Date(value);
-
   return Number.isNaN(date.getTime())
     ? String(value)
     : date.toLocaleString("en-IN");
 }
 
 function formatNumber(value) {
-  if (value === undefined || value === null || value === "") {
-    return "—";
-  }
-
-  return Number(value).toLocaleString("en-IN");
+  if (value === undefined || value === null || value === "") return "—";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("en-IN") : "—";
 }
 
 function formatDecimal(value, digits = 4) {
-  return Number(value).toFixed(digits);
+  if (value === undefined || value === null || value === "") return "—";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(digits) : "—";
 }
 
 function formatPercent(value) {
-  return `${(Number(value) * 100).toFixed(2)}%`;
+  if (value === undefined || value === null || value === "") return "—";
+  const number = Number(value);
+  return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : "—";
 }
 
 function getModelObject(response) {
   const data = response?.data;
-
-  if (Array.isArray(data)) {
-    return data[0] ?? {};
-  }
-
+  if (Array.isArray(data)) return data[0] ?? {};
   return data?.item ?? data?.model ?? data?.data ?? data ?? {};
 }
 
 function getModelList(response) {
   const data = response?.data;
+  if (Array.isArray(data)) return data;
 
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  const items =
-    data?.items ??
-    data?.models ??
-    data?.results ??
-    data?.data;
-
+  const items = data?.items ?? data?.models ?? data?.results ?? data?.data;
   return Array.isArray(items) ? items : [];
 }
 
@@ -132,39 +119,45 @@ function ModelMonitoring() {
   const [model, setModel] = useState(null);
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [currentError, setCurrentError] = useState("");
   const [historyError, setHistoryError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   useEffect(() => {
     let active = true;
+    let hasLoadedOnce = false;
+    let requestInProgress = false;
 
     async function loadModels() {
-      setLoading(true);
-      setCurrentError("");
-      setHistoryError("");
+      if (requestInProgress) return;
+      requestInProgress = true;
 
-      const [currentResult, historyResult] =
-        await Promise.allSettled([
-          api.get("/models/current"),
-          api.get("/models"),
-        ]);
+      if (active) {
+        if (!hasLoadedOnce) setLoading(true);
+        else setRefreshing(true);
+        setCurrentError("");
+        setHistoryError("");
+      }
 
-      if (!active) return;
+      const [currentResult, historyResult] = await Promise.allSettled([
+        api.get("/models/current"),
+        api.get("/models"),
+      ]);
+
+      if (!active) {
+        requestInProgress = false;
+        return;
+      }
 
       if (currentResult.status === "fulfilled") {
         const current = getModelObject(currentResult.value);
-
-        setModel(
-          Object.keys(current).length > 0 ? current : null
-        );
+        setModel(Object.keys(current).length > 0 ? current : null);
       } else {
-        setModel(null);
-
-        const error = currentResult.reason;
-
+        // Keep the last successful model data visible if a refresh fails.
         setCurrentError(
-          error?.response?.data?.detail ??
-            error?.message ??
+          currentResult.reason?.response?.data?.detail ??
+            currentResult.reason?.message ??
             "Unable to load the current model."
         );
       }
@@ -172,38 +165,40 @@ function ModelMonitoring() {
       if (historyResult.status === "fulfilled") {
         setModels(getModelList(historyResult.value));
       } else {
-        setModels([]);
-
-        const error = historyResult.reason;
-
         setHistoryError(
-          error?.response?.status === 403
-            ? "Your account does not have permission to view model history. Ask your backend teammate to check the endpoint permissions."
-            : error?.response?.data?.detail ??
-                error?.message ??
+          historyResult.reason?.response?.status === 403
+            ? "Your account does not have permission to view model history."
+            : historyResult.reason?.response?.data?.detail ??
+                historyResult.reason?.message ??
                 "Unable to load model history."
         );
       }
 
+      if (
+        currentResult.status === "fulfilled" ||
+        historyResult.status === "fulfilled"
+      ) {
+        setLastUpdated(new Date());
+      }
+
       setLoading(false);
+      setRefreshing(false);
+      hasLoadedOnce = true;
+      requestInProgress = false;
     }
 
     loadModels();
+    const intervalId = setInterval(loadModels, 30000);
 
     return () => {
       active = false;
+      clearInterval(intervalId);
     };
   }, []);
 
-  const version =
-    model?.version ??
-    model?.model_version ??
-    MODEL_VERSION;
-
+  const version = model?.version ?? model?.model_version ?? MODEL_VERSION_FALLBACK;
   const artifactPath =
-    model?.artifact_path ??
-    "ml/models/xgboost_baseline.joblib";
-
+    model?.artifact_path ?? "ml/models/xgboost_baseline.joblib";
   const trainedAt =
     model?.trained_at ??
     model?.updated_at ??
@@ -215,28 +210,37 @@ function ModelMonitoring() {
       ? model.active
         ? "Active"
         : "Inactive"
-      : model?.status ??
-        model?.deployment_status ??
-        "Not reported";
+      : model?.status ?? model?.deployment_status ?? "Not reported";
 
   const algorithm =
-    model?.algorithm ??
-    model?.model_type ??
-    model?.model_name ??
-    "XGBoost";
+    model?.algorithm ?? model?.model_type ?? model?.model_name ?? "XGBoost";
 
-  const confusionMatrix = [
-    {
-      name: "Actual legitimate",
-      correct: TEST_RESULTS.tn,
-      incorrect: TEST_RESULTS.fp,
-    },
-    {
-      name: "Actual fraud",
-      correct: TEST_RESULTS.tp,
-      incorrect: TEST_RESULTS.fn,
-    },
-  ];
+  // Metrics are sourced from the active model registry API.
+  // Do not substitute saved test metrics when API values are missing.
+  const metrics = model?.metrics_json ?? {};
+
+  const precision = metrics.precision;
+  const recall = metrics.recall;
+  const f1Score = metrics.f1_score ?? metrics.f1;
+  const rocAuc = metrics.roc_auc ?? metrics.roc_auc_score;
+  const prAuc = metrics.pr_auc ?? metrics.average_precision;
+  const expectedCost = metrics.expected_cost ?? metrics.test_expected_cost;
+
+  const confusionMatrix = useMemo(
+    () => [
+      {
+        name: "Actual legitimate",
+        correct: SAVED_TEST_RESULTS.tn,
+        incorrect: SAVED_TEST_RESULTS.fp,
+      },
+      {
+        name: "Actual fraud",
+        correct: SAVED_TEST_RESULTS.tp,
+        incorrect: SAVED_TEST_RESULTS.fn,
+      },
+    ],
+    []
+  );
 
   return (
     <div className="app-layout">
@@ -250,142 +254,132 @@ function ModelMonitoring() {
             <div>
               <h1>Model Monitoring</h1>
               <p>
-                Monitor the registered model, saved test
-                performance, and cost-sensitive policy
-                evaluation results.
+                Monitor registered model information and the latest evaluation
+                metrics supplied by the backend API.
+              </p>
+              <p className="monitoring-last-updated">
+                {lastUpdated
+                  ? `Last API update: ${formatDate(lastUpdated)}`
+                  : "Waiting for the first API response..."}
+                {refreshing ? " · Refreshing..." : ""}
               </p>
             </div>
 
             <span className="data-status">
-              SAVED EVALUATION RESULTS
+              API REFRESH: EVERY 30 SECONDS
             </span>
           </div>
 
           {currentError && (
             <div className="dashboard-info" role="alert">
               <p>
-                Could not load registered model information:{" "}
+                Could not refresh registered model information:{" "}
                 {String(currentError)}
               </p>
+            </div>
+          )}
+
+          {loading && !model && (
+            <div className="dashboard-info" role="status">
+              <p>Loading model information from the backend API...</p>
             </div>
           )}
 
           <section className="stats-grid">
             <StatCard
               title="Model Version"
-              value={MODEL_VERSION}
-              subtitle="Version recorded in model metadata"
+              value={version}
+              subtitle={model ? "From registered model API" : "No API model loaded"}
             />
 
             <StatCard
               title="Algorithm"
-              value="XGBoost"
-              subtitle="Trained model artifact"
+              value={algorithm}
+              subtitle={model ? "Registered model metadata" : "No API model loaded"}
             />
 
             <StatCard
               title="Precision"
-              value={formatPercent(TEST_RESULTS.precision)}
-              subtitle="Saved test result"
+              value={formatPercent(precision)}
+              subtitle="From registered model API"
             />
 
             <StatCard
               title="Recall"
-              value={formatPercent(TEST_RESULTS.recall)}
-              subtitle="Saved test result"
+              value={formatPercent(recall)}
+              subtitle="From registered model API"
             />
 
             <StatCard
               title="F1 Score"
-              value={formatDecimal(TEST_RESULTS.f1, 2)}
-              subtitle="Saved test result"
+              value={formatDecimal(f1Score, 2)}
+              subtitle="From registered model API"
             />
 
             <StatCard
               title="ROC-AUC"
-              value={formatDecimal(TEST_RESULTS.roc_auc)}
-              subtitle="Saved test result"
+              value={formatDecimal(rocAuc)}
+              subtitle="From registered model API"
             />
 
             <StatCard
               title="PR-AUC"
-              value={formatDecimal(TEST_RESULTS.pr_auc)}
-              subtitle="Saved test result"
+              value={formatDecimal(prAuc)}
+              subtitle="From registered model API"
             />
 
             <StatCard
-              title="Test Expected Cost"
-              value={formatNumber(TEST_RESULTS.expected_cost)}
-              subtitle="Reported by final_test_results.csv"
+              title="Expected Cost"
+              value={formatNumber(expectedCost)}
+              subtitle="Only shown when supplied by the API"
             />
           </section>
 
           <section className="dashboard-card">
             <h2>Model Information</h2>
-
             <p>
-              The following information identifies the model
-              configured in this project. Registration status
-              and training timestamp are shown only when
-              supplied by the backend.
+              This section displays the active model information returned by
+              the backend. Registration status and training timestamp appear
+              only when supplied by the API.
             </p>
 
             <div className="model-info-list">
               <p>
                 <strong>Model version:</strong> {version}
               </p>
-
               <p>
                 <strong>Algorithm:</strong> {algorithm}
               </p>
-
               <p>
                 <strong>Artifact path:</strong> {artifactPath}
               </p>
-
               <p>
-                <strong>Local artifact:</strong>{" "}
+                <strong>Local artifact reference:</strong>{" "}
                 ml/models/xgboost_baseline.joblib
               </p>
-
               <p>
-                <strong>Preprocessor:</strong>{" "}
+                <strong>Preprocessor reference:</strong>{" "}
                 ml/models/preprocessor.joblib
               </p>
-
               <p>
-                <strong>Dataset:</strong>{" "}
-                {TEST_RESULTS.dataset}
+                <strong>Registered model status:</strong> {activeStatus}
               </p>
-
               <p>
-                <strong>Evaluation split:</strong>{" "}
-                {TEST_RESULTS.split}
+                <strong>Training date:</strong> {formatDate(trainedAt)}
               </p>
-
               <p>
-                <strong>Evaluation threshold:</strong>{" "}
-                {TEST_RESULTS.threshold}
-              </p>
-
-              <p>
-                <strong>Registered model status:</strong>{" "}
-                {activeStatus}
-              </p>
-
-              <p>
-                <strong>Training date:</strong>{" "}
-                {formatDate(trainedAt)}
+                <strong>Last successful API update:</strong>{" "}
+                {formatDate(lastUpdated)}
               </p>
             </div>
           </section>
 
           <section className="dashboard-card">
-            <h2>Test Confusion Matrix</h2>
-
+            <h2>Saved Test Confusion Matrix</h2>
             <p>
-              Actual test-set counts from
-              ml/reports/final_test_results.csv.
+              This chart is retained from the offline test report. It is not
+              live transaction performance and does not refresh from the model
+              registry API.
             </p>
 
             <div className="table-container">
@@ -397,18 +391,16 @@ function ModelMonitoring() {
                     <th>Incorrect prediction</th>
                   </tr>
                 </thead>
-
                 <tbody>
                   <tr>
                     <td>Legitimate</td>
-                    <td>{formatNumber(TEST_RESULTS.tn)} true negatives</td>
-                    <td>{formatNumber(TEST_RESULTS.fp)} false positives</td>
+                    <td>{formatNumber(SAVED_TEST_RESULTS.tn)} true negatives</td>
+                    <td>{formatNumber(SAVED_TEST_RESULTS.fp)} false positives</td>
                   </tr>
-
                   <tr>
                     <td>Fraud</td>
-                    <td>{formatNumber(TEST_RESULTS.tp)} true positives</td>
-                    <td>{formatNumber(TEST_RESULTS.fn)} false negatives</td>
+                    <td>{formatNumber(SAVED_TEST_RESULTS.tp)} true positives</td>
+                    <td>{formatNumber(SAVED_TEST_RESULTS.fn)} false negatives</td>
                   </tr>
                 </tbody>
               </table>
@@ -437,23 +429,23 @@ function ModelMonitoring() {
             </div>
 
             <p>
-              These are offline test-set results at threshold
-              0.5. They are not counts of live transactions.
+              Offline test-set results at threshold{" "}
+              {SAVED_TEST_RESULTS.threshold}; these are not counts of live
+              transactions.
             </p>
           </section>
 
           <section className="dashboard-card">
-            <h2>Cost-Sensitive Policy Comparison</h2>
-
+            <h2>Saved Cost-Sensitive Policy Comparison</h2>
             <p>
-              Compare the saved expected costs under the
-              three scenarios in
-              ml/reports/cost_sensitivity_results.csv.
+              These are saved scenario results. They remain static until a
+              backend evaluation endpoint is added to return fresh policy
+              evaluation results.
             </p>
 
             <div style={{ width: "100%", height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={COST_SCENARIOS}>
+                <BarChart data={SAVED_COST_SCENARIOS}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="scenario"
@@ -486,20 +478,15 @@ function ModelMonitoring() {
                     <th>Block threshold</th>
                   </tr>
                 </thead>
-
                 <tbody>
-                  {COST_SCENARIOS.map((scenario) => (
+                  {SAVED_COST_SCENARIOS.map((scenario) => (
                     <tr key={scenario.scenario}>
                       <td>{scenario.scenario}</td>
                       <td>{formatNumber(scenario.expectedCost)}</td>
                       <td>{formatNumber(scenario.approve)}</td>
                       <td>{formatNumber(scenario.review)}</td>
                       <td>{formatNumber(scenario.block)}</td>
-                      <td>
-                        {`${(
-                          scenario.reviewRate * 100
-                        ).toFixed(4)}%`}
-                      </td>
+                      <td>{`${(scenario.reviewRate * 100).toFixed(4)}%`}</td>
                       <td>{scenario.approveThreshold}</td>
                       <td>{scenario.blockThreshold}</td>
                     </tr>
@@ -509,24 +496,21 @@ function ModelMonitoring() {
             </div>
 
             <p>
-              The baseline reference has the lowest reported
-              expected cost among these three scenarios.
-              These saved results do not by themselves prove
-              that it is optimal for every deployment.
+              Saved comparisons do not prove that one policy is optimal for
+              every deployment.
             </p>
           </section>
 
           <section className="dashboard-card">
-            <h2>Decision Distribution by Scenario</h2>
-
+            <h2>Saved Decision Distribution by Scenario</h2>
             <p>
-              Saved approve, review, and block counts for
-              each cost-sensitive policy scenario.
+              These approve, review, and block counts come from saved policy
+              scenarios, not from live transaction traffic.
             </p>
 
             <div style={{ width: "100%", height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={COST_SCENARIOS}>
+                <BarChart data={SAVED_COST_SCENARIOS}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="scenario"
@@ -536,21 +520,9 @@ function ModelMonitoring() {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Bar
-                    dataKey="approve"
-                    name="Approve"
-                    fill="#16a34a"
-                  />
-                  <Bar
-                    dataKey="review"
-                    name="Review"
-                    fill="#d97706"
-                  />
-                  <Bar
-                    dataKey="block"
-                    name="Block"
-                    fill="#dc2626"
-                  />
+                  <Bar dataKey="approve" name="Approve" fill="#16a34a" />
+                  <Bar dataKey="review" name="Review" fill="#d97706" />
+                  <Bar dataKey="block" name="Block" fill="#dc2626" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -581,7 +553,6 @@ function ModelMonitoring() {
                           <th>Trained At</th>
                         </tr>
                       </thead>
-
                       <tbody>
                         {models.map((item, index) => (
                           <tr
@@ -593,17 +564,9 @@ function ModelMonitoring() {
                             }
                           >
                             <td>
-                              {item.version ??
-                                item.model_version ??
-                                "—"}
+                              {item.version ?? item.model_version ?? "—"}
                             </td>
-
-                            <td>
-                              {item.id ??
-                                item.model_id ??
-                                "—"}
-                            </td>
-
+                            <td>{item.id ?? item.model_id ?? "—"}</td>
                             <td>
                               {typeof item.active === "boolean"
                                 ? item.active
@@ -611,9 +574,7 @@ function ModelMonitoring() {
                                   : "Inactive"
                                 : item.status ?? "—"}
                             </td>
-
                             <td>{item.artifact_path ?? "—"}</td>
-
                             <td>
                               {formatDate(
                                 item.trained_at ??
@@ -628,21 +589,16 @@ function ModelMonitoring() {
                   </div>
                 ) : (
                   !historyError && (
-                    <p>
-                      No model history records were returned
-                      by the backend.
-                    </p>
+                    <p>No model history records were returned by the backend.</p>
                   )
                 )}
               </>
             )}
 
             <p>
-              The page reads registered model information
-              from the backend. The test metrics and policy
-              comparisons above are saved evaluation results.
-              This page does not train, retrain, or activate
-              models.
+              The registered model information and version history are fetched
+              from the backend API every 30 seconds. This page does not train,
+              retrain, or activate models.
             </p>
           </section>
         </main>

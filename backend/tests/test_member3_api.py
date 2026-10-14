@@ -55,7 +55,7 @@ def test_dashboard_summary_works_for_authenticated_operator(monkeypatch):
     monkeypatch.setattr(
         dashboard,
         "get_dashboard_summary",
-        lambda db: {
+        lambda db, user_id: {
             "total_transactions": 0,
             "total_predictions": 0,
             "review_count": 0,

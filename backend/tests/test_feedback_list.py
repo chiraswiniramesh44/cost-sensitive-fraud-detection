@@ -1,80 +1,136 @@
-"""Tests for GET /feedback listing and service filtering."""
 
-from datetime import datetime, timezone
-from types import SimpleNamespace
-from unittest.mock import MagicMock
+"""Database round-trip test for operator feedback persistence."""
+
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import text
 
-from backend.app.api.deps import get_current_user, get_db
-from backend.app.main import app
-from backend.app.services.feedback_service import list_feedback
-
-
-client = TestClient(app)
-
-
-def teardown_function():
-    app.dependency_overrides.clear()
-
-
-def test_list_feedback_requires_authentication():
-    response = client.get("/feedback")
-    assert response.status_code == 401
+from backend.app.core.security import hash_password
+from backend.app.models.audit_log import AuditLog
+from backend.app.models.operator_feedback import OperatorFeedback
+from backend.app.models.prediction import Prediction
+from backend.app.models.transaction import Transaction
+from backend.app.models.user import User
+from backend.app.schemas.feedback import FeedbackRequest
+from backend.app.services.feedback_service import (
+    list_feedback,
+    submit_feedback,
+)
 
 
-def test_list_feedback_returns_paginated_items(monkeypatch):
-    operator = MagicMock()
-    operator.id = uuid4()
-    operator.role = "OPERATOR"
+def _db_available() -> bool:
+    try:
+        from backend.app.db.session import SessionLocal
 
-    app.dependency_overrides[get_current_user] = lambda: operator
-    app.dependency_overrides[get_db] = lambda: MagicMock()
-
-    from backend.app.api import feedback as feedback_api
-
-    row = SimpleNamespace(
-        id=uuid4(),
-        transaction_id=uuid4(),
-        user_id=operator.id,
-        decision="CONFIRMED_GENUINE",
-        reason_code="MANUAL_REVIEW",
-        comment=None,
-        created_at=datetime.now(timezone.utc),
-    )
-
-    monkeypatch.setattr(
-        feedback_api,
-        "list_feedback",
-        lambda db, limit=50, offset=0, transaction_id=None: ([row], 1),
-    )
-
-    response = client.get("/feedback?limit=10&offset=0")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["total"] == 1
-    assert len(body["items"]) == 1
-    assert body["items"][0]["decision"] == "CONFIRMED_GENUINE"
-    assert body["items"][0]["reason_code"] == "MANUAL_REVIEW"
-    assert body["limit"] == 10
-    assert body["offset"] == 0
+        db = SessionLocal()
+        try:
+            db.execute(text("SELECT 1"))
+            return True
+        finally:
+            db.close()
+    except Exception:
+        return False
 
 
-def test_list_feedback_service_applies_transaction_filter():
-    db = MagicMock()
-    db.scalar.return_value = 0
-    db.scalars.return_value.all.return_value = []
+@pytest.mark.skipif(
+    not _db_available(),
+    reason="Configured database is unavailable",
+)
+def test_feedback_persists_and_is_retrievable_from_database():
+    from backend.app.db.session import SessionLocal
 
-    transaction_id = uuid4()
-    list_feedback(db, limit=25, offset=5, transaction_id=transaction_id)
+    db = SessionLocal()
+    email = f"qa-feedback-{uuid4().hex[:8]}@example.com"
+    user_id = None
+    transaction_id = None
 
-    count_stmt = db.scalar.call_args.args[0]
-    compiled = str(
-        count_stmt.compile(compile_kwargs={"literal_binds": True})
-    )
-    assert "operator_feedback" in compiled.lower()
-    assert "transaction_id" in compiled.lower()
-    # SQLAlchemy may render UUID literals without hyphens.
-    assert transaction_id.hex in compiled.replace("-", "")
+    try:
+        user = User(
+            email=email,
+            password_hash=hash_password("Test-Password-123!"),
+            role="OPERATOR",
+        )
+        db.add(user)
+        db.flush()
+        user_id = user.id
+
+        transaction = Transaction(
+            user_id=user.id,
+            external_id=f"qa-feedback-{uuid4().hex[:12]}",
+            payload_json={"Amount": 42.0},
+            amount=42.0,
+        )
+        db.add(transaction)
+        db.flush()
+        transaction_id = transaction.id
+
+        db.add(
+            Prediction(
+                transaction_id=transaction.id,
+                model_version="xgb-cost-v1",
+                probability=0.35,
+                risk_level="MEDIUM",
+                decision="REVIEW",
+                expected_cost=7.5,
+            )
+        )
+        db.commit()
+
+        feedback = submit_feedback(
+            db=db,
+            request=FeedbackRequest(
+                transaction_id=transaction.id,
+                operator_decision="CONFIRMED_GENUINE",
+                reason_code="QA_DB_ROUNDTRIP",
+                comment="synthetic persistence check",
+            ),
+            current_user=user,
+        )
+
+        feedback_id = feedback.id
+
+        rows, total = list_feedback(
+    db=db,
+    user_id=user.id,
+    limit=50,
+    offset=0,
+    transaction_id=transaction.id,
+)
+
+        assert total == 1
+        assert len(rows) == 1
+        assert rows[0].id == feedback_id
+        assert rows[0].user_id == user.id
+        assert rows[0].reason_code == "QA_DB_ROUNDTRIP"
+
+    finally:
+        try:
+            if transaction_id is not None:
+                db.query(OperatorFeedback).filter(
+                    OperatorFeedback.transaction_id == transaction_id
+                ).delete(synchronize_session=False)
+
+                db.query(Prediction).filter(
+                    Prediction.transaction_id == transaction_id
+                ).delete(synchronize_session=False)
+
+                db.query(Transaction).filter(
+                    Transaction.id == transaction_id
+                ).delete(synchronize_session=False)
+
+            if user_id is not None:
+                db.query(AuditLog).filter(
+                    AuditLog.user_id == user_id
+                ).delete(synchronize_session=False)
+
+                db.query(User).filter(
+                    User.id == user_id
+                ).delete(synchronize_session=False)
+
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()

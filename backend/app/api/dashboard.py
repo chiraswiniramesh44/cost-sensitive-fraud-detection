@@ -23,7 +23,7 @@ def dashboard_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DashboardSummary:
-    return get_dashboard_summary(db)
+    return get_dashboard_summary(db, current_user.id)
 
 
 @router.get("/cost", response_model=DashboardCost)
@@ -31,4 +31,4 @@ def dashboard_cost(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DashboardCost:
-    return get_dashboard_cost(db)
+    return get_dashboard_cost(db, current_user.id)

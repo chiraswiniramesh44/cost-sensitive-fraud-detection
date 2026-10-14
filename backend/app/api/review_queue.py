@@ -27,6 +27,7 @@ def read_review_queue(
 ) -> ReviewQueueResponse:
     return get_review_queue(
         db=db,
+        user_id=current_user.id,
         limit=limit,
         offset=offset,
     )

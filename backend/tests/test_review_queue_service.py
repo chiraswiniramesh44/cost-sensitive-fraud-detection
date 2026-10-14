@@ -1,3 +1,4 @@
+
 """Regression tests for review-queue filtering and API shape.
 
 Root cause of empty queue with HTTP 200:
@@ -45,6 +46,7 @@ def _make_pair(decision: str, amount: float = 100.0):
     )
     prediction.id = uuid4()
     prediction.created_at = datetime.now(timezone.utc)
+
     return prediction, transaction
 
 
@@ -54,12 +56,18 @@ def test_review_queue_query_filters_decision_to_review_only():
     db.scalar.return_value = 0
     db.execute.return_value.all.return_value = []
 
-    get_review_queue(db=db, limit=50, offset=0)
+    get_review_queue(
+        db=db,
+        user_id=uuid4(),
+        limit=50,
+        offset=0,
+    )
 
     count_stmt = db.scalar.call_args.args[0]
     compiled = str(
         count_stmt.compile(compile_kwargs={"literal_binds": True})
     )
+
     assert "REVIEW" in compiled
     assert "predictions" in compiled.lower()
 
@@ -70,12 +78,17 @@ def test_review_queue_returns_only_review_rows_from_mixed_results():
     approve_pair = _make_pair("APPROVE", amount=25.0)
     block_pair = _make_pair("BLOCK", amount=900.0)
 
-    # Simulate DB already applying the REVIEW filter: only review_pair returned.
+    # Simulate the database returning only rows matching the REVIEW filter.
     db = MagicMock()
     db.scalar.return_value = 1
     db.execute.return_value.all.return_value = [review_pair]
 
-    response = get_review_queue(db=db, limit=50, offset=0)
+    response = get_review_queue(
+        db=db,
+        user_id=uuid4(),
+        limit=50,
+        offset=0,
+    )
 
     assert isinstance(response, ReviewQueueResponse)
     assert response.total == 1
@@ -84,7 +97,6 @@ def test_review_queue_returns_only_review_rows_from_mixed_results():
     assert response.items[0].amount == 500.0
     assert response.items[0].external_id == review_pair[1].external_id
 
-    # Guard against accidental inclusion of non-review fixtures in the test.
     assert approve_pair[0].decision == "APPROVE"
     assert block_pair[0].decision == "BLOCK"
 
@@ -120,7 +132,7 @@ def test_review_queue_endpoint_returns_persisted_review_items(monkeypatch):
     monkeypatch.setattr(
         review_queue_api,
         "get_review_queue",
-        lambda db, limit=50, offset=0: ReviewQueueResponse(
+        lambda db, user_id, limit=50, offset=0: ReviewQueueResponse(
             items=[item],
             total=1,
             limit=limit,
@@ -139,7 +151,7 @@ def test_review_queue_endpoint_returns_persisted_review_items(monkeypatch):
 
 
 def test_empty_review_queue_is_valid_when_no_review_decisions(monkeypatch):
-    """HTTP 200 with total=0 is correct when only APPROVE/BLOCK exist."""
+    """HTTP 200 with total=0 is correct when no REVIEW decisions exist."""
     operator = MagicMock()
     operator.id = uuid4()
     operator.role = "OPERATOR"
@@ -153,7 +165,7 @@ def test_empty_review_queue_is_valid_when_no_review_decisions(monkeypatch):
     monkeypatch.setattr(
         review_queue_api,
         "get_review_queue",
-        lambda db, limit=50, offset=0: ReviewQueueResponse(
+        lambda db, user_id, limit=50, offset=0: ReviewQueueResponse(
             items=[],
             total=0,
             limit=limit,

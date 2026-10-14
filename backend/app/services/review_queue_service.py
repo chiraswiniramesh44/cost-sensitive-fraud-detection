@@ -1,4 +1,6 @@
 
+from uuid import UUID
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -12,6 +14,7 @@ from backend.app.schemas.review_queue import (
 
 def get_review_queue(
     db: Session,
+    user_id: UUID,
     limit: int = 50,
     offset: int = 0,
 ) -> ReviewQueueResponse:
@@ -21,13 +24,14 @@ def get_review_queue(
             Transaction,
             Prediction.transaction_id == Transaction.id,
         )
-        .where(Prediction.decision == "REVIEW")
+        .where(
+            Prediction.decision == "REVIEW",
+            Transaction.user_id == user_id,
+        )
     )
 
     total = db.scalar(
-        select(func.count()).select_from(
-            base_query.subquery()
-        )
+        select(func.count()).select_from(base_query.subquery())
     ) or 0
 
     rows = db.execute(

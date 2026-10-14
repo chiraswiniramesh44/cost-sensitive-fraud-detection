@@ -17,16 +17,22 @@ def persist_prediction(
     result: dict[str, Any],
     user_id: UUID | None = None,
 ) -> dict[str, Any]:
-    """Persist a transaction, its prediction, and audit event atomically."""
+    """Persist a transaction, prediction, and audit event atomically."""
     try:
-        transaction = db.scalar(
-            select(Transaction)
-            .where(Transaction.external_id == external_id)
-            .with_for_update()
+        query = select(Transaction).where(
+            Transaction.external_id == external_id,
         )
+
+        if user_id is not None:
+            query = query.where(Transaction.user_id == user_id)
+        else:
+            query = query.where(Transaction.user_id.is_(None))
+
+        transaction = db.scalar(query.with_for_update())
 
         if transaction is None:
             transaction = Transaction(
+                user_id=user_id,
                 external_id=external_id,
                 payload_json=features,
                 amount=features["Amount"],

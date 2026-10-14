@@ -1,10 +1,9 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000",
-  headers: {
-    "Content-Type": "application/json",
-  },
+  baseURL: (
+    import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
+  ).replace(/\/+$/, ""),
 });
 
 api.interceptors.request.use(
@@ -13,6 +12,13 @@ api.interceptors.request.use(
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Let Axios set the multipart Content-Type for FormData.
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    } else if (config.data !== undefined) {
+      config.headers["Content-Type"] = "application/json";
     }
 
     return config;
